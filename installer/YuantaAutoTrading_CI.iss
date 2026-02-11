@@ -34,8 +34,8 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"
 
 [Files]
-Source: "..\build\bin\Release\yuanta_autotrading.exe"; DestDir: "{app}"; Flags: ignoreversion
-Source: "..\build\bin\Release\backtest.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\build\Release\yuanta_autotrading.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\build\Release\backtest.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\config\settings.json"; DestDir: "{app}\config"; Flags: ignoreversion
 Source: "..\config\settings.ini"; DestDir: "{app}\config"; Flags: ignoreversion confirmoverwrite
 Source: "..\README.md"; DestDir: "{app}\docs"; Flags: ignoreversion

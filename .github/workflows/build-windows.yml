@@ -29,17 +29,37 @@ jobs:
     - name: Build
       run: cmake --build build --config ${{env.BUILD_TYPE}} --parallel
 
-    - name: Run Tests
+    - name: Find Build Output
+      id: find-output
       run: |
-        if (Test-Path "build/bin/${{env.BUILD_TYPE}}/backtest.exe") {
-          Write-Host "Build successful!"
-          dir build/bin/${{env.BUILD_TYPE}}/
+        # 가능한 빌드 출력 경로들 확인
+        $paths = @(
+          "build/bin/Release",
+          "build/Release",
+          "build/bin/${{env.BUILD_TYPE}}",
+          "build/${{env.BUILD_TYPE}}"
+        )
+
+        foreach ($path in $paths) {
+          if (Test-Path "$path/backtest.exe") {
+            Write-Host "Found build output at: $path"
+            echo "BUILD_OUTPUT=$path" >> $env:GITHUB_OUTPUT
+            dir $path
+            break
+          }
         }
 
     - name: Create Portable Package
       run: |
         $version = "1.0.0"
         $outputDir = "dist/YuantaAutoTrading_Portable_$version"
+        $buildPath = "${{ steps.find-output.outputs.BUILD_OUTPUT }}"
+
+        if ([string]::IsNullOrEmpty($buildPath)) {
+          $buildPath = "build/Release"
+        }
+
+        Write-Host "Using build path: $buildPath"
 
         New-Item -ItemType Directory -Force -Path $outputDir
         New-Item -ItemType Directory -Force -Path "$outputDir/config"
@@ -47,8 +67,8 @@ jobs:
         New-Item -ItemType Directory -Force -Path "$outputDir/data"
         New-Item -ItemType Directory -Force -Path "$outputDir/docs"
 
-        Copy-Item "build/bin/${{env.BUILD_TYPE}}/yuanta_autotrading.exe" $outputDir/
-        Copy-Item "build/bin/${{env.BUILD_TYPE}}/backtest.exe" $outputDir/
+        Copy-Item "$buildPath/yuanta_autotrading.exe" $outputDir/
+        Copy-Item "$buildPath/backtest.exe" $outputDir/
         Copy-Item "config/settings.json" "$outputDir/config/"
         Copy-Item "config/settings.ini" "$outputDir/config/"
         Copy-Item "README.md" "$outputDir/docs/"
@@ -107,7 +127,8 @@ jobs:
       with:
         name: YuantaAutoTrading-Binaries
         path: |
-          build/bin/${{env.BUILD_TYPE}}/*.exe
+          build/**/*.exe
+        if-no-files-found: warn
 
   release:
     needs: build
