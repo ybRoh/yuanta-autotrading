@@ -31,10 +31,11 @@ void signalHandler(int signum) {
 // 간단한 설정 로더
 struct AppConfig {
     // API 설정
-    std::string apiServer = "api.myasset.com";
-    int apiPort = 8080;
+    std::string apiServer = "simul.tradar.api.com";  // 기본: 모의투자 서버
+    std::string dllPath = "";  // yuantaapi.dll 경로
     std::string userId = "";
     std::string userPassword = "";
+    std::string certPassword = "";
 
     // 리스크 설정
     double dailyBudget = 10000000.0;
@@ -53,12 +54,15 @@ struct AppConfig {
     bool loadFromFile(const std::string& filepath) {
         std::ifstream file(filepath);
         if (!file.is_open()) {
-            std::cout << "Config file not found, using defaults" << std::endl;
+            std::cout << "Config file not found: " << filepath << ", using defaults" << std::endl;
             return false;
         }
 
         std::string line;
         while (std::getline(file, line)) {
+            // 주석 및 빈 줄 무시
+            if (line.empty() || line[0] == '#' || line[0] == ';') continue;
+
             // 간단한 key=value 파싱
             size_t pos = line.find('=');
             if (pos == std::string::npos) continue;
@@ -66,18 +70,37 @@ struct AppConfig {
             std::string key = line.substr(0, pos);
             std::string value = line.substr(pos + 1);
 
-            if (key == "userId") userId = value;
+            // 앞뒤 공백 제거
+            while (!key.empty() && (key.back() == ' ' || key.back() == '\t')) key.pop_back();
+            while (!value.empty() && (value.front() == ' ' || value.front() == '\t')) value.erase(0, 1);
+
+            if (key == "apiServer") apiServer = value;
+            else if (key == "dllPath") dllPath = value;
+            else if (key == "userId") userId = value;
+            else if (key == "userPassword") userPassword = value;
+            else if (key == "certPassword") certPassword = value;
             else if (key == "dailyBudget") dailyBudget = std::stod(value);
             else if (key == "maxPositionRatio") maxPositionRatio = std::stod(value);
+            else if (key == "maxDailyLossRatio") maxDailyLossRatio = std::stod(value);
+            else if (key == "maxConcurrentPositions") maxConcurrentPositions = std::stoi(value);
+            else if (key == "enableGapPullback") enableGapPullback = (value == "true" || value == "1");
+            else if (key == "enableMABreakout") enableMABreakout = (value == "true" || value == "1");
+            else if (key == "enableBBSqueeze") enableBBSqueeze = (value == "true" || value == "1");
             else if (key == "watchlist") {
                 std::stringstream ss(value);
                 std::string code;
                 while (std::getline(ss, code, ',')) {
-                    watchlist.push_back(code);
+                    // 공백 제거
+                    while (!code.empty() && code.front() == ' ') code.erase(0, 1);
+                    while (!code.empty() && code.back() == ' ') code.pop_back();
+                    if (!code.empty()) {
+                        watchlist.push_back(code);
+                    }
                 }
             }
         }
 
+        std::cout << "Config loaded from: " << filepath << std::endl;
         return true;
     }
 };
@@ -113,7 +136,8 @@ int main(int argc, char* argv[]) {
 
     // 기본 관심 종목 (설정 파일에 없는 경우)
     if (config.watchlist.empty()) {
-        config.watchlist = {"005930", "000660", "035420"};  // 삼성전자, SK하이닉스, NAVER
+        config.watchlist = {"005930", "000660", "035420", "051910", "006400"};
+        // 삼성전자, SK하이닉스, NAVER, LG화학, 삼성SDI
     }
 
     // 1. 리스크 매니저 초기화
@@ -126,7 +150,8 @@ int main(int argc, char* argv[]) {
     RiskManager riskManager(budgetConfig);
 
     std::cout << "Risk Manager initialized:" << std::endl;
-    std::cout << "  - Daily Budget: " << budgetConfig.dailyBudget << " KRW" << std::endl;
+    std::cout << "  - Daily Budget: " << std::fixed << std::setprecision(0)
+              << budgetConfig.dailyBudget << " KRW" << std::endl;
     std::cout << "  - Max Position: " << budgetConfig.getMaxPositionSize() << " KRW" << std::endl;
     std::cout << "  - Max Daily Loss: " << budgetConfig.getMaxDailyLoss() << " KRW" << std::endl;
     std::cout << "  - Max Positions: " << budgetConfig.maxConcurrentPositions << std::endl;
@@ -134,50 +159,82 @@ int main(int argc, char* argv[]) {
 
     // 2. API 초기화
     YuantaAPI api;
-    if (!api.initialize()) {
-        std::cerr << "Failed to initialize API" << std::endl;
-        // 시뮬레이션 모드로 계속 진행
+    std::cout << "Initializing Yuanta API..." << std::endl;
+
+    // DLL 경로 지정 (설정 파일에 있으면 사용)
+    if (!api.initialize(config.dllPath)) {
+        std::cerr << "Critical error: Failed to initialize API" << std::endl;
+        return 1;
     }
 
-    if (!api.connect(config.apiServer, config.apiPort)) {
+    // 서버 연결
+    std::cout << "Connecting to server: " << config.apiServer << std::endl;
+    if (!api.connect(config.apiServer)) {
         std::cerr << "Failed to connect to server" << std::endl;
-        // 시뮬레이션 모드로 계속 진행
+        // 시뮬레이션 모드면 계속 진행
+        if (!api.isSimulationMode()) {
+            return 1;
+        }
     }
 
+    // 로그인 (ID가 있는 경우에만)
     if (!config.userId.empty()) {
-        if (!api.login(config.userId, config.userPassword)) {
+        std::cout << "Logging in as: " << config.userId << std::endl;
+        if (!api.login(config.userId, config.userPassword, config.certPassword)) {
             std::cerr << "Login failed" << std::endl;
+            if (!api.isSimulationMode()) {
+                return 1;
+            }
         }
+    } else if (api.isSimulationMode()) {
+        // 시뮬레이션 모드에서 로그인 없이 진행
+        std::cout << "No login credentials - running in demo mode" << std::endl;
+    }
+
+    // 모드 표시
+    if (api.isSimulationMode()) {
+        std::cout << "\n*** SIMULATION MODE - No real trading ***\n" << std::endl;
+    } else {
+        std::cout << "\n*** LIVE MODE - Real trading enabled ***\n" << std::endl;
     }
 
     // 3. 시세 데이터 매니저 초기화
     MarketDataManager dataManager;
     dataManager.setAPI(&api);
 
+    std::cout << "Loading market data for watchlist:" << std::endl;
     for (const auto& code : config.watchlist) {
+        std::cout << "  - " << code;
         dataManager.addWatchlist(code);
-        dataManager.loadHistoricalData(code, 60);  // 60일치 데이터 로드
+
+        // 과거 데이터 로드
+        auto dailyCandles = dataManager.loadHistoricalData(code, 60);
+        auto minuteCandles = dataManager.getMinuteCandles(code, 1, 100);
+
+        std::cout << " (Daily: " << dailyCandles.size()
+                  << ", Minute: " << minuteCandles.size() << ")" << std::endl;
     }
+    std::cout << std::endl;
 
     // 4. 전략 매니저 초기화
     StrategyManager strategyManager;
     strategyManager.setRiskManager(&riskManager);
 
+    std::cout << "Strategies:" << std::endl;
     if (config.enableGapPullback) {
         strategyManager.addStrategy(std::make_unique<GapPullbackStrategy>());
-        std::cout << "Strategy enabled: Gap Pullback (65-70% win rate)" << std::endl;
+        std::cout << "  - Gap Pullback (Expected win rate: 65-70%)" << std::endl;
     }
 
     if (config.enableMABreakout) {
         strategyManager.addStrategy(std::make_unique<MABreakoutStrategy>());
-        std::cout << "Strategy enabled: MA Breakout (55-60% win rate)" << std::endl;
+        std::cout << "  - MA Breakout (Expected win rate: 55-60%)" << std::endl;
     }
 
     if (config.enableBBSqueeze) {
         strategyManager.addStrategy(std::make_unique<BBSqueezeStrategy>());
-        std::cout << "Strategy enabled: BB Squeeze (60-65% win rate)" << std::endl;
+        std::cout << "  - BB Squeeze (Expected win rate: 60-65%)" << std::endl;
     }
-
     std::cout << std::endl;
 
     // 5. 주문 실행기 초기화
@@ -201,14 +258,20 @@ int main(int argc, char* argv[]) {
     // 7. 실시간 시세 시작
     dataManager.startRealtime();
 
-    std::cout << "System started. Press Ctrl+C to stop.\n" << std::endl;
+    std::cout << "========================================" << std::endl;
+    std::cout << "System started. Press Ctrl+C to stop." << std::endl;
+    std::cout << "========================================\n" << std::endl;
 
     // 8. 메인 루프
     int loopCount = 0;
     while (running) {
-        // 장 시간 체크
-        if (!dataManager.isMarketOpen()) {
+        // 장 시간 체크 (시뮬레이션 모드에서는 항상 열림)
+        if (!api.isSimulationMode() && !dataManager.isMarketOpen()) {
+            if (loopCount % 60 == 0) {
+                std::cout << "Market closed. Waiting..." << std::endl;
+            }
             std::this_thread::sleep_for(std::chrono::seconds(60));
+            loopCount++;
             continue;
         }
 
@@ -220,8 +283,8 @@ int main(int argc, char* argv[]) {
             continue;
         }
 
-        // 강제 청산 시간 체크 (14:30 이후)
-        if (riskManager.shouldForceClose()) {
+        // 강제 청산 시간 체크 (14:30 이후) - 시뮬레이션에서는 무시
+        if (!api.isSimulationMode() && riskManager.shouldForceClose()) {
             std::cout << "Market close approaching. Closing all positions..." << std::endl;
             orderExecutor.closeAllPositions();
             std::this_thread::sleep_for(std::chrono::seconds(60));
@@ -244,9 +307,13 @@ int main(int argc, char* argv[]) {
                     // 진입 가능 여부 확인
                     int qty = riskManager.calculatePositionSize(signal.price);
                     if (riskManager.canOpenPosition(code, signal.price, qty)) {
-                        std::cout << "BUY SIGNAL: " << code << " @ " << signal.price
+                        std::cout << "[" << code << "] BUY SIGNAL @ "
+                                  << std::fixed << std::setprecision(0) << signal.price
                                   << " (" << signal.reason << ")" << std::endl;
 
+                        if (api.isSimulationMode()) {
+                            std::cout << "  -> Simulated buy: " << qty << " shares" << std::endl;
+                        }
                         orderExecutor.executeSignal(signal);
                     }
                 }
@@ -260,13 +327,13 @@ int main(int argc, char* argv[]) {
                 riskManager.getAllPositions(), quotes);
 
             for (const auto& closeSignal : closeSignals) {
-                std::cout << "CLOSE SIGNAL: " << closeSignal.code << std::endl;
+                std::cout << "[" << closeSignal.code << "] CLOSE SIGNAL" << std::endl;
                 orderExecutor.executeSignal(closeSignal);
             }
         }
 
-        // 상태 출력 (60초마다)
-        if (++loopCount % 60 == 0) {
+        // 상태 출력 (30초마다)
+        if (++loopCount % 30 == 0) {
             printStatus(riskManager, strategyManager);
         }
 
