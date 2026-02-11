@@ -1,0 +1,41 @@
+MIT License
+
+Copyright (c) 2024 Your Company
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+================================================================================
+
+면책 조항 (DISCLAIMER)
+
+이 소프트웨어는 교육 및 연구 목적으로 제공됩니다.
+
+주식 투자에는 원금 손실의 위험이 있습니다. 자동매매 시스템을 사용하더라도
+시장 상황, 기술적 오류, 네트워크 장애 등으로 인해 예상치 못한 손실이
+발생할 수 있습니다.
+
+본 소프트웨어의 사용으로 인해 발생하는 모든 금전적 손실에 대해
+개발자 및 배포자는 어떠한 책임도 지지 않습니다.
+
+실전 투자 전 반드시:
+1. 모의투자 환경에서 충분한 테스트를 수행하세요.
+2. 소액으로 시작하여 시스템의 동작을 확인하세요.
+3. 투자 결정은 본인의 책임 하에 이루어져야 합니다.
+
+================================================================================

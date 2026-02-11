@@ -1,0 +1,65 @@
+{
+    "api": {
+        "server": "api.myasset.com",
+        "port": 8080,
+        "userId": "",
+        "password": "",
+        "certPassword": ""
+    },
+    "risk": {
+        "dailyBudget": 10000000,
+        "maxPositionRatio": 0.20,
+        "maxDailyLossRatio": 0.03,
+        "perTradeLossRatio": 0.015,
+        "maxConcurrentPositions": 3
+    },
+    "strategies": {
+        "gapPullback": {
+            "enabled": true,
+            "minGapPercent": 1.5,
+            "maxGapPercent": 5.0,
+            "pullbackMin": 0.5,
+            "pullbackMax": 1.5,
+            "volumeMultiple": 2.0,
+            "takeProfitPercent": 2.0,
+            "stopLossPercent": 1.0,
+            "entryWindowMinutes": 15
+        },
+        "maBreakout": {
+            "enabled": true,
+            "fastMA": 5,
+            "midMA": 10,
+            "slowMA": 20,
+            "volumeMultiple": 3.0,
+            "rsiMin": 50,
+            "rsiMax": 70,
+            "takeProfit1Percent": 1.5,
+            "takeProfit2Percent": 3.0,
+            "stopLossPercent": 1.2
+        },
+        "bbSqueeze": {
+            "enabled": true,
+            "bbPeriod": 20,
+            "bbStdDev": 2.0,
+            "squeezeLookback": 50,
+            "squeezePercentile": 0.20,
+            "volumeMultiple": 1.5,
+            "rsiMin": 55,
+            "rsiMax": 75,
+            "stopLossPercent": 1.5
+        }
+    },
+    "watchlist": [
+        "005930",
+        "000660",
+        "035420",
+        "005380",
+        "051910"
+    ],
+    "trading": {
+        "forceCloseTime": "14:30",
+        "slippage": 0.1,
+        "commission": 0.015,
+        "tax": 0.23
+    }
+}

@@ -1,0 +1,131 @@
+name: Build Windows Installer
+
+on:
+  push:
+    branches: [ main, master ]
+    tags:
+      - 'v*'
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:  # 수동 실행 허용
+
+env:
+  BUILD_TYPE: Release
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Setup CMake
+      uses: lukka/get-cmake@latest
+
+    - name: Configure CMake
+      run: cmake -B build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} -A x64
+
+    - name: Build
+      run: cmake --build build --config ${{env.BUILD_TYPE}} --parallel
+
+    - name: Run Tests
+      run: |
+        if (Test-Path "build/bin/${{env.BUILD_TYPE}}/backtest.exe") {
+          Write-Host "Build successful!"
+          dir build/bin/${{env.BUILD_TYPE}}/
+        }
+
+    - name: Create Portable Package
+      run: |
+        $version = "1.0.0"
+        $outputDir = "dist/YuantaAutoTrading_Portable_$version"
+
+        New-Item -ItemType Directory -Force -Path $outputDir
+        New-Item -ItemType Directory -Force -Path "$outputDir/config"
+        New-Item -ItemType Directory -Force -Path "$outputDir/logs"
+        New-Item -ItemType Directory -Force -Path "$outputDir/data"
+        New-Item -ItemType Directory -Force -Path "$outputDir/docs"
+
+        Copy-Item "build/bin/${{env.BUILD_TYPE}}/yuanta_autotrading.exe" $outputDir/
+        Copy-Item "build/bin/${{env.BUILD_TYPE}}/backtest.exe" $outputDir/
+        Copy-Item "config/settings.json" "$outputDir/config/"
+        Copy-Item "config/settings.ini" "$outputDir/config/"
+        Copy-Item "README.md" "$outputDir/docs/"
+        Copy-Item "LICENSE" "$outputDir/docs/"
+
+        # 실행 스크립트 생성
+        '@echo off
+        cd /d "%~dp0"
+        start yuanta_autotrading.exe' | Out-File -Encoding ASCII "$outputDir/Run.bat"
+
+        '@echo off
+        cd /d "%~dp0"
+        backtest.exe
+        pause' | Out-File -Encoding ASCII "$outputDir/Backtest.bat"
+
+        # ZIP 생성
+        Compress-Archive -Path "$outputDir/*" -DestinationPath "dist/YuantaAutoTrading_Portable_$version.zip" -Force
+
+    - name: Download Inno Setup
+      run: |
+        Invoke-WebRequest -Uri "https://jrsoftware.org/download.php/is.exe" -OutFile "innosetup.exe"
+        Start-Process -FilePath "innosetup.exe" -ArgumentList "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-" -Wait
+
+    - name: Create Installer with Inno Setup
+      run: |
+        # 아이콘 파일이 없으면 더미 생성
+        if (!(Test-Path "assets/icon.ico")) {
+          New-Item -ItemType Directory -Force -Path "assets"
+          # 빈 아이콘 대신 기본 아이콘 사용 (Inno Setup에서 처리)
+        }
+
+        # Inno Setup 스크립트 수정 (아이콘 라인 제거)
+        $issContent = Get-Content "installer/YuantaAutoTrading.iss" -Raw
+        $issContent = $issContent -replace 'SetupIconFile=.*\r?\n', ''
+        $issContent = $issContent -replace 'UninstallDisplayIcon=.*\r?\n', ''
+        $issContent | Out-File -Encoding UTF8 "installer/YuantaAutoTrading_ci.iss"
+
+        & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "installer/YuantaAutoTrading_ci.iss"
+      continue-on-error: true
+
+    - name: Upload Portable Package
+      uses: actions/upload-artifact@v4
+      with:
+        name: YuantaAutoTrading-Portable-Windows
+        path: dist/*.zip
+
+    - name: Upload Installer
+      uses: actions/upload-artifact@v4
+      with:
+        name: YuantaAutoTrading-Installer-Windows
+        path: dist/*.exe
+      if: success() || failure()
+
+    - name: Upload Executables Only
+      uses: actions/upload-artifact@v4
+      with:
+        name: YuantaAutoTrading-Binaries
+        path: |
+          build/bin/${{env.BUILD_TYPE}}/*.exe
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+
+    steps:
+    - name: Download artifacts
+      uses: actions/download-artifact@v4
+
+    - name: Create Release
+      uses: softprops/action-gh-release@v1
+      with:
+        files: |
+          YuantaAutoTrading-Portable-Windows/*.zip
+          YuantaAutoTrading-Installer-Windows/*.exe
+          YuantaAutoTrading-Binaries/*.exe
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
