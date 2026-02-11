@@ -157,7 +157,7 @@ std::string WebServer::generateDashboardHtml() {
     auto nowTime = std::chrono::system_clock::to_time_t(now);
     struct tm* tm_info = localtime(&nowTime);
 
-    std::string korTime = (tm_info->tm_hour < 12) ? "오전 " : "오후 ";
+    std::string korTime = (tm_info->tm_hour < 12) ? "AM " : "PM ";
     char hourMin[10];
     int hour12 = tm_info->tm_hour % 12;
     if (hour12 == 0) hour12 = 12;
@@ -199,11 +199,11 @@ std::string WebServer::generateDashboardHtml() {
     <script language="JavaScript">
         function startTrading() {
             SendCommand('START');
-            document.getElementById('statusText').innerText = '시작 명령 전송됨...';
+            document.getElementById('statusText').innerText = 'Start command sent...';
         }
         function stopTrading() {
             SendCommand('STOP');
-            document.getElementById('statusText').innerText = '정지 명령 전송됨...';
+            document.getElementById('statusText').innerText = 'Stop command sent...';
         }
         function addWatchlist() {
             var code = document.getElementById('watchlistInput').value;
@@ -481,8 +481,8 @@ std::string WebServer::generateDashboardHtml() {
                 <tbody>)";
 
     std::map<std::string, std::string> stockNames = {
-        {"005930", "삼성전자"}, {"000660", "SK하이닉스"}, {"035420", "NAVER"},
-        {"051910", "LG화학"}, {"006400", "삼성SDI"}, {"005380", "현대차"}
+        {"005930", "Samsung"}, {"000660", "SK Hynix"}, {"035420", "NAVER"},
+        {"051910", "LG Chem"}, {"006400", "Samsung SDI"}, {"005380", "Hyundai"}
     };
 
     for (const auto& q : dashboardData.quotes) {
@@ -583,7 +583,7 @@ std::string WebServer::generateDashboardHtml() {
     </div>
 
     <div class="footer">
-        2초마다 자동 새로고침
+        Auto-refresh every 2 seconds
     </div>
 </body>
 </html>)";
