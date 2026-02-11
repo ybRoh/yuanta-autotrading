@@ -153,7 +153,7 @@ std::string WebServer::generateDashboardHtml() {
     <meta charset="UTF-8">
     <meta http-equiv="refresh" content="2">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>유안타 자동매매 시뮬레이터 v1.0.1</title>
+    <title>유안타 자동매매 시뮬레이터 v1.0.3</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -344,7 +344,7 @@ std::string WebServer::generateDashboardHtml() {
     <div class="header">
         <div class="title">
             <span>🚀</span>
-            <span>유안타 자동매매 시뮬레이터 v1.0.1</span>
+            <span>유안타 자동매매 시뮬레이터 v1.0.3</span>
         </div>
         <div class="controls">
             <div class="status-badge">

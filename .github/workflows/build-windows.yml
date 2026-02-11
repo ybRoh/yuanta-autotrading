@@ -51,7 +51,7 @@ jobs:
 
     - name: Create Portable Package
       run: |
-        $version = "1.0.1"
+        $version = "1.0.3"
         $outputDir = "dist/YuantaAutoTrading_Portable_$version"
         $buildPath = "${{ steps.find-output.outputs.BUILD_OUTPUT }}"
 
