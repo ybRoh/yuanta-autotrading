@@ -172,10 +172,10 @@ std::string WebServer::generateDashboardHtml() {
     <meta charset="UTF-8">
     <meta http-equiv="refresh" content="2">
     <meta http-equiv="x-ua-compatible" content="ie=edge">
-    <title>유안타 자동매매 시뮬레이터 v1.0.3</title>
+    <title>Yuanta AutoTrading v1.0.4</title>
     <HTA:APPLICATION
         ID="YuantaTrading"
-        APPLICATIONNAME="유안타 자동매매"
+        APPLICATIONNAME="Yuanta AutoTrading"
         BORDER="thin"
         BORDERSTYLE="normal"
         INNERBORDER="no"
@@ -405,57 +405,57 @@ std::string WebServer::generateDashboardHtml() {
 <body>
     <div class="header">
         <div class="title">
-            <span>🚀</span>
-            <span>유안타 자동매매 시뮬레이터 v1.0.3</span>
+            <span>[T]</span>
+            <span>Yuanta AutoTrading v1.0.4</span>
         </div>
         <div class="controls">
             <div class="status-badge">
-                <span>🤖</span>
-                <span>)" << (dashboardData.isSimulationMode ? "시뮬레이션" : "실거래") << R"( (08:50~15:30)</span>
+                <span>[S]</span>
+                <span>)" << (dashboardData.isSimulationMode ? "SIMULATION" : "LIVE") << R"( (08:50~15:30)</span>
             </div>
-            <span id="statusText" style="color:#f1c40f;font-size:0.9em;">)" << (tradingActive ? "🟢 매매 활성화" : "⚪ 대기중") << R"(</span>
-            <button class="btn btn-start" onclick="startTrading()">▶ 시작</button>
-            <button class="btn btn-stop" onclick="stopTrading()">■ 정지</button>
+            <span id="statusText" style="color:#f1c40f;font-size:0.9em;">)" << (tradingActive ? "[ON] Trading Active" : "[OFF] Standby") << R"(</span>
+            <button class="btn btn-start" onclick="startTrading()">START</button>
+            <button class="btn btn-stop" onclick="stopTrading()">STOP</button>
         </div>
     </div>
 
     <div class="watchlist-section">
         <div class="section-title">
-            <span>⭐</span>
-            <span>우선검토 종목 (WATCHLIST)</span>
+            <span>[*]</span>
+            <span>WATCHLIST</span>
         </div>
         <div class="watchlist-input">
-            <input type="text" id="watchlistInput" placeholder="종목코드 (예: 005930)">
-            <button class="btn btn-add" onclick="addWatchlist()">추가</button>
-            <button class="btn btn-reset" onclick="resetWatchlist()">초기화</button>
+            <input type="text" id="watchlistInput" placeholder="Stock Code (e.g. 005930)">
+            <button class="btn btn-add" onclick="addWatchlist()">Add</button>
+            <button class="btn btn-reset" onclick="resetWatchlist()">Reset</button>
         </div>
-        <div class="watchlist-info">선택된 종목: <span style="color:#4ecdc4">전체 종목</span></div>
+        <div class="watchlist-info">Selected: <span style="color:#4ecdc4">All Stocks</span></div>
     </div>
 
     <div class="stats-grid">
         <div class="stat-card">
-            <div class="stat-label">잔고</div>
-            <div class="stat-value">)" << std::setprecision(0) << dashboardData.dailyBudget << R"(원</div>
+            <div class="stat-label">Balance</div>
+            <div class="stat-value">)" << std::setprecision(0) << dashboardData.dailyBudget << R"( KRW</div>
         </div>
         <div class="stat-card">
-            <div class="stat-label">총자산</div>
-            <div class="stat-value">)" << (dashboardData.dailyBudget + dashboardData.totalPnL) << R"(원</div>
+            <div class="stat-label">Total Assets</div>
+            <div class="stat-value">)" << (dashboardData.dailyBudget + dashboardData.totalPnL) << R"( KRW</div>
         </div>
         <div class="stat-card">
-            <div class="stat-label">손익</div>
+            <div class="stat-label">P&L</div>
             <div class="stat-value )" << (dashboardData.totalPnL >= 0 ? "pnl-positive" : "pnl-negative") << R"(">)"
-        << (dashboardData.totalPnL >= 0 ? "+" : "") << dashboardData.totalPnL << R"(원 ()"
+        << (dashboardData.totalPnL >= 0 ? "+" : "") << dashboardData.totalPnL << R"( KRW ()"
         << std::setprecision(2) << (dashboardData.dailyBudget > 0 ? (dashboardData.totalPnL / dashboardData.dailyBudget * 100) : 0) << R"(%)</div>
         </div>
     </div>
 
     <div class="trade-stats">
         <div class="trade-card">
-            <div class="stat-label">거래현황</div>
-            <div class="stat-value">매수 )" << dashboardData.winTrades << R"( / 매도 )" << dashboardData.lossTrades << R"(</div>
+            <div class="stat-label">Trades</div>
+            <div class="stat-value">Buy )" << dashboardData.winTrades << R"( / Sell )" << dashboardData.lossTrades << R"(</div>
         </div>
         <div class="trade-card">
-            <div class="stat-label">현재시간</div>
+            <div class="stat-label">Time</div>
             <div class="stat-value">)" << korTime << R"(</div>
         </div>
     </div>
@@ -463,17 +463,17 @@ std::string WebServer::generateDashboardHtml() {
     <div class="data-section">
         <div class="data-card">
             <div class="card-title realtime">
-                <span>📈</span>
-                <span>실시간 시세</span>
+                <span>[Q]</span>
+                <span>Real-time Quotes</span>
             </div>
             <table>
                 <thead>
                     <tr>
-                        <th>종목코드</th>
-                        <th>종목명</th>
-                        <th>현재가</th>
-                        <th>등락률</th>
-                        <th>거래량</th>
+                        <th>Code</th>
+                        <th>Name</th>
+                        <th>Price</th>
+                        <th>Change</th>
+                        <th>Volume</th>
                         <th>RSI(2)</th>
                         <th>20MA</th>
                     </tr>
@@ -500,7 +500,7 @@ std::string WebServer::generateDashboardHtml() {
     }
 
     if (dashboardData.quotes.empty()) {
-        html << "<tr><td colspan='7' style='text-align:center;color:#5a6a7a;padding:20px;'>데이터 로딩 중...</td></tr>";
+        html << "<tr><td colspan='7' style='text-align:center;color:#5a6a7a;padding:20px;'>Loading data...</td></tr>";
     }
 
     html << R"(
@@ -510,17 +510,17 @@ std::string WebServer::generateDashboardHtml() {
 
         <div class="data-card">
             <div class="card-title holdings">
-                <span>💼</span>
-                <span>보유 종목</span>
+                <span>[P]</span>
+                <span>Positions</span>
             </div>
             <table>
                 <thead>
                     <tr>
-                        <th>종목명</th>
-                        <th>수량</th>
-                        <th>매입가</th>
-                        <th>현재가</th>
-                        <th>수익</th>
+                        <th>Name</th>
+                        <th>Qty</th>
+                        <th>Avg Price</th>
+                        <th>Current</th>
+                        <th>P&L</th>
                     </tr>
                 </thead>
                 <tbody>)";
@@ -538,7 +538,7 @@ std::string WebServer::generateDashboardHtml() {
     }
 
     if (dashboardData.positions.empty()) {
-        html << "<tr><td colspan='5' style='text-align:center;color:#5a6a7a;padding:20px;'>보유 종목 없음</td></tr>";
+        html << "<tr><td colspan='5' style='text-align:center;color:#5a6a7a;padding:20px;'>No positions</td></tr>";
     }
 
     html << R"(
@@ -549,8 +549,8 @@ std::string WebServer::generateDashboardHtml() {
 
     <div class="log-section">
         <div class="card-title">
-            <span>📝</span>
-            <span>거래 로그</span>
+            <span>[L]</span>
+            <span>Trade Log</span>
         </div>)";
 
     for (size_t i = 0; i < dashboardData.logs.size() && i < 10; i++) {
@@ -565,15 +565,10 @@ std::string WebServer::generateDashboardHtml() {
         char logTimeStr[20];
         strftime(logTimeStr, 20, "%H:%M:%S", tm_log);
 
-        std::string typeKor = log.type;
-        if (log.type == "BUY") typeKor = "매수";
-        else if (log.type == "SELL") typeKor = "매도";
-        else if (log.type == "SIGNAL") typeKor = "신호";
-
         html << "<div class=\"log-entry " << logClass << "\">";
-        html << "<span>[" << typeKor << "] " << log.code << " - " << log.message;
+        html << "<span>[" << log.type << "] " << log.code << " - " << log.message;
         if (log.price > 0) {
-            html << " @ " << std::setprecision(0) << log.price << "원";
+            html << " @ " << std::setprecision(0) << log.price << " KRW";
         }
         html << "</span>";
         html << "<span class=\"log-time\">" << logTimeStr << "</span>";
@@ -581,7 +576,7 @@ std::string WebServer::generateDashboardHtml() {
     }
 
     if (dashboardData.logs.empty()) {
-        html << "<div class=\"log-entry log-info\"><span>거래 로그가 없습니다.</span></div>";
+        html << "<div class=\"log-entry log-info\"><span>No trade logs.</span></div>";
     }
 
     html << R"(

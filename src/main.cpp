@@ -212,7 +212,7 @@ void printStatus(RiskManager& rm, StrategyManager& sm) {
 
 int main(int argc, char* argv[]) {
     std::cout << "========================================" << std::endl;
-    std::cout << "  Yuanta AutoTrading System v1.0.3" << std::endl;
+    std::cout << "  Yuanta AutoTrading System v1.0.4" << std::endl;
     std::cout << "  with Web Dashboard" << std::endl;
     std::cout << "========================================\n" << std::endl;
 
