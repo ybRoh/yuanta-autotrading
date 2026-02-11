@@ -344,7 +344,7 @@ std::string WebServer::generateDashboardHtml() {
     <div class="header">
         <div class="title">
             <span class="title-icon">🚀</span>
-            <span>유안타 자동매매 시뮬레이터 v1.1.0</span>
+            <span>유안타 자동매매 시뮬레이터 v1.0.1</span>
         </div>
         <div class="controls">
             <div class="status-badge">

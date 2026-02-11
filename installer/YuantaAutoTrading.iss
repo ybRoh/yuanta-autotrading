@@ -9,7 +9,7 @@
 
 #define MyAppName "유안타 자동매매"
 #define MyAppNameEng "Yuanta AutoTrading"
-#define MyAppVersion "1.0.0"
+#define MyAppVersion "1.0.1"
 #define MyAppPublisher "Your Company"
 #define MyAppURL "https://github.com/your-repo/yuanta-autotrading"
 #define MyAppExeName "yuanta_autotrading.exe"
