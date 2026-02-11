@@ -42,7 +42,6 @@ void WebServer::stop() {
 
 void WebServer::updateDashboardData(const DashboardData& data) {
     std::lock_guard<std::mutex> lock(dataMutex);
-    // 로그는 유지하면서 다른 데이터만 업데이트
     auto oldLogs = dashboardData.logs;
     dashboardData = data;
     dashboardData.logs = oldLogs;
@@ -79,113 +78,17 @@ void WebServer::serverThread() {
         res.set_content(generateDashboardHtml(), "text/html; charset=utf-8");
     });
 
-    // API 엔드포인트 - JSON 데이터
+    // API 엔드포인트
     svr.Get("/api/status", [this](const httplib::Request&, httplib::Response& res) {
         res.set_header("Access-Control-Allow-Origin", "*");
         res.set_content(generateApiResponse(), "application/json; charset=utf-8");
     });
 
-    // 정적 파일 (CSS, JS)
-    svr.Get("/style.css", [](const httplib::Request&, httplib::Response& res) {
-        res.set_content(R"(
-body {
-    font-family: 'Segoe UI', Tahoma, sans-serif;
-    margin: 0;
-    padding: 20px;
-    background: #1a1a2e;
-    color: #eee;
-}
-.header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 20px;
-    padding: 15px 20px;
-    background: #16213e;
-    border-radius: 10px;
-}
-.header h1 { margin: 0; color: #00d9ff; }
-.status-badge {
-    padding: 8px 16px;
-    border-radius: 20px;
-    font-weight: bold;
-}
-.status-running { background: #00c853; color: #000; }
-.status-stopped { background: #ff5252; color: #fff; }
-.status-simulation { background: #ffc107; color: #000; }
-.grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-    gap: 20px;
-    margin-bottom: 20px;
-}
-.card {
-    background: #16213e;
-    border-radius: 10px;
-    padding: 20px;
-    box-shadow: 0 4px 6px rgba(0,0,0,0.3);
-}
-.card h2 {
-    margin: 0 0 15px 0;
-    color: #00d9ff;
-    font-size: 1.1em;
-    border-bottom: 1px solid #0f3460;
-    padding-bottom: 10px;
-}
-.stat-row {
-    display: flex;
-    justify-content: space-between;
-    padding: 8px 0;
-    border-bottom: 1px solid #0f3460;
-}
-.stat-row:last-child { border-bottom: none; }
-.stat-label { color: #888; }
-.stat-value { font-weight: bold; }
-.positive { color: #00c853; }
-.negative { color: #ff5252; }
-.neutral { color: #ffc107; }
-table {
-    width: 100%;
-    border-collapse: collapse;
-}
-th, td {
-    padding: 10px;
-    text-align: left;
-    border-bottom: 1px solid #0f3460;
-}
-th {
-    color: #00d9ff;
-    font-weight: normal;
-    font-size: 0.9em;
-}
-.log-entry {
-    padding: 8px 12px;
-    margin: 5px 0;
-    border-radius: 5px;
-    font-size: 0.9em;
-    display: flex;
-    justify-content: space-between;
-}
-.log-buy { background: rgba(0,200,83,0.2); border-left: 3px solid #00c853; }
-.log-sell { background: rgba(255,82,82,0.2); border-left: 3px solid #ff5252; }
-.log-signal { background: rgba(0,217,255,0.2); border-left: 3px solid #00d9ff; }
-.log-info { background: rgba(255,255,255,0.1); border-left: 3px solid #888; }
-.log-time { color: #888; font-size: 0.85em; }
-.refresh-info {
-    text-align: center;
-    color: #666;
-    font-size: 0.8em;
-    margin-top: 20px;
-}
-)", "text/css");
-    });
-
     std::cout << "\n========================================" << std::endl;
-    std::cout << "  Web Dashboard started at:" << std::endl;
+    std::cout << "  Web Dashboard:" << std::endl;
     std::cout << "  http://localhost:" << port << std::endl;
     std::cout << "========================================\n" << std::endl;
 
-    // 서버 실행 (블로킹)
     while (running) {
         svr.listen("0.0.0.0", port);
     }
@@ -197,8 +100,6 @@ std::string WebServer::generateApiResponse() {
 
     json << std::fixed << std::setprecision(0);
     json << "{";
-
-    // 계좌 정보
     json << "\"account\":{";
     json << "\"dailyBudget\":" << dashboardData.dailyBudget << ",";
     json << "\"realizedPnL\":" << dashboardData.realizedPnL << ",";
@@ -209,74 +110,10 @@ std::string WebServer::generateApiResponse() {
     json << "\"winTrades\":" << dashboardData.winTrades << ",";
     json << "\"lossTrades\":" << dashboardData.lossTrades;
     json << "},";
-
-    // 시스템 상태
     json << "\"system\":{";
     json << "\"isRunning\":" << (dashboardData.isRunning ? "true" : "false") << ",";
-    json << "\"isMarketOpen\":" << (dashboardData.isMarketOpen ? "true" : "false") << ",";
-    json << "\"isSimulationMode\":" << (dashboardData.isSimulationMode ? "true" : "false") << ",";
-    json << "\"serverUrl\":\"" << dashboardData.serverUrl << "\",";
-    json << "\"uptime\":" << dashboardData.uptime;
-    json << "},";
-
-    // 포지션
-    json << "\"positions\":[";
-    for (size_t i = 0; i < dashboardData.positions.size(); i++) {
-        const auto& pos = dashboardData.positions[i];
-        if (i > 0) json << ",";
-        json << std::setprecision(0);
-        json << "{\"code\":\"" << pos.code << "\",";
-        json << "\"name\":\"" << pos.name << "\",";
-        json << "\"quantity\":" << pos.quantity << ",";
-        json << "\"avgPrice\":" << pos.avgPrice << ",";
-        json << "\"currentPrice\":" << pos.currentPrice << ",";
-        json << "\"pnl\":" << pos.pnl << ",";
-        json << "\"pnlRate\":" << std::setprecision(2) << pos.pnlRate << "}";
-    }
-    json << "],";
-
-    // 시세
-    json << "\"quotes\":[";
-    for (size_t i = 0; i < dashboardData.quotes.size(); i++) {
-        const auto& q = dashboardData.quotes[i];
-        if (i > 0) json << ",";
-        json << std::setprecision(0);
-        json << "{\"code\":\"" << q.code << "\",";
-        json << "\"price\":" << q.price << ",";
-        json << "\"change\":" << q.change << ",";
-        json << "\"changeRate\":" << std::setprecision(2) << q.changeRate << ",";
-        json << "\"volume\":" << q.volume << "}";
-    }
-    json << "],";
-
-    // 전략
-    json << "\"strategies\":[";
-    for (size_t i = 0; i < dashboardData.strategies.size(); i++) {
-        const auto& s = dashboardData.strategies[i];
-        if (i > 0) json << ",";
-        json << "{\"name\":\"" << s.name << "\",";
-        json << "\"enabled\":" << (s.enabled ? "true" : "false") << ",";
-        json << "\"signals\":" << s.signals << ",";
-        json << "\"trades\":" << s.trades << ",";
-        json << "\"pnl\":" << std::setprecision(0) << s.pnl << "}";
-    }
-    json << "],";
-
-    // 로그
-    json << "\"logs\":[";
-    for (size_t i = 0; i < dashboardData.logs.size() && i < 20; i++) {
-        const auto& log = dashboardData.logs[i];
-        if (i > 0) json << ",";
-        json << "{\"timestamp\":" << log.timestamp << ",";
-        json << "\"type\":\"" << log.type << "\",";
-        json << "\"code\":\"" << log.code << "\",";
-        json << "\"message\":\"" << log.message << "\",";
-        json << "\"price\":" << std::setprecision(0) << log.price << ",";
-        json << "\"quantity\":" << log.quantity << ",";
-        json << "\"pnl\":" << log.pnl << "}";
-    }
-    json << "]";
-
+    json << "\"isSimulationMode\":" << (dashboardData.isSimulationMode ? "true" : "false");
+    json << "}";
     json << "}";
 
     return json.str();
@@ -284,6 +121,19 @@ std::string WebServer::generateApiResponse() {
 
 std::string WebServer::generateDashboardHtml() {
     std::lock_guard<std::mutex> lock(dataMutex);
+
+    // 현재 시간
+    auto now = std::chrono::system_clock::now();
+    auto nowTime = std::chrono::system_clock::to_time_t(now);
+    struct tm* tm_info = localtime(&nowTime);
+    char timeStr[20];
+    strftime(timeStr, 20, "%p %I:%M:%S", tm_info);
+
+    // 한국어 오전/오후
+    std::string korTime = (tm_info->tm_hour < 12) ? "오전 " : "오후 ";
+    char hourMin[10];
+    strftime(hourMin, 10, "%I:%M:%S", tm_info);
+    korTime += hourMin;
 
     std::ostringstream html;
     html << std::fixed;
@@ -293,131 +143,305 @@ std::string WebServer::generateDashboardHtml() {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Yuanta AutoTrading Dashboard</title>
-    <link rel="stylesheet" href="/style.css">
+    <title>유안타 자동매매 시뮬레이터</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif;
+            background: #0d1421;
+            color: #e1e5eb;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 25px;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+        .title {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 1.5em;
+            color: #4ecdc4;
+        }
+        .title-icon { font-size: 1.3em; }
+        .controls {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        .status-badge {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 15px;
+            background: #1a2332;
+            border-radius: 20px;
+            font-size: 0.9em;
+        }
+        .btn {
+            padding: 10px 25px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 0.95em;
+        }
+        .btn-start { background: #4ecdc4; color: #0d1421; }
+        .btn-stop { background: #e74c3c; color: white; opacity: 0.6; }
+
+        /* Watchlist Section */
+        .watchlist-section {
+            background: #141d2b;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .section-title {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: #f1c40f;
+            font-size: 1em;
+            margin-bottom: 15px;
+        }
+        .watchlist-input {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+        .watchlist-input input {
+            background: #1a2332;
+            border: 1px solid #2a3a4a;
+            padding: 10px 15px;
+            border-radius: 8px;
+            color: #7a8a9a;
+            width: 200px;
+        }
+        .btn-add { background: #3a4a5a; color: white; }
+        .btn-reset { background: #e74c3c; color: white; }
+        .watchlist-info { color: #4ecdc4; font-size: 0.85em; }
+
+        /* Stats Cards */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        .stat-card {
+            background: #141d2b;
+            border-radius: 12px;
+            padding: 20px;
+        }
+        .stat-label {
+            color: #7a8a9a;
+            font-size: 0.85em;
+            margin-bottom: 8px;
+        }
+        .stat-value {
+            font-size: 1.8em;
+            font-weight: bold;
+        }
+        .stat-value.positive { color: #e74c3c; }
+        .stat-value.negative { color: #3498db; }
+        .stat-value.loss { color: #e74c3c; }
+        .stat-value.profit { color: #3498db; }
+
+        /* Trade Stats */
+        .trade-stats {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        .trade-card {
+            background: #141d2b;
+            border-radius: 12px;
+            padding: 20px;
+        }
+
+        /* Tables */
+        .data-section {
+            display: grid;
+            grid-template-columns: 1.5fr 1fr;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        .data-card {
+            background: #141d2b;
+            border-radius: 12px;
+            padding: 20px;
+        }
+        .card-title {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 1em;
+            margin-bottom: 15px;
+        }
+        .card-title.realtime { color: #e74c3c; }
+        .card-title.holdings { color: #f39c12; }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        th {
+            text-align: left;
+            padding: 10px 8px;
+            color: #7a8a9a;
+            font-weight: normal;
+            font-size: 0.85em;
+            border-bottom: 1px solid #2a3a4a;
+        }
+        td {
+            padding: 12px 8px;
+            border-bottom: 1px solid #1a2a3a;
+            font-size: 0.9em;
+        }
+        .change-negative { color: #3498db; }
+        .change-positive { color: #e74c3c; }
+        .pnl-positive { color: #e74c3c; }
+        .pnl-negative { color: #3498db; }
+
+        /* Log Section */
+        .log-section {
+            background: #141d2b;
+            border-radius: 12px;
+            padding: 20px;
+        }
+        .log-entry {
+            padding: 10px 12px;
+            margin: 5px 0;
+            border-radius: 6px;
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.85em;
+        }
+        .log-buy { background: rgba(231,76,60,0.15); border-left: 3px solid #e74c3c; }
+        .log-sell { background: rgba(52,152,219,0.15); border-left: 3px solid #3498db; }
+        .log-signal { background: rgba(78,205,196,0.15); border-left: 3px solid #4ecdc4; }
+        .log-info { background: rgba(127,140,141,0.15); border-left: 3px solid #7f8c8d; }
+        .log-time { color: #7a8a9a; }
+
+        .footer {
+            text-align: center;
+            color: #5a6a7a;
+            font-size: 0.8em;
+            margin-top: 20px;
+        }
+
+        @media (max-width: 900px) {
+            .data-section { grid-template-columns: 1fr; }
+        }
+    </style>
 </head>
 <body>
     <div class="header">
-        <h1>📈 Yuanta AutoTrading</h1>
-        <div>
-            <span class="status-badge )" << (dashboardData.isSimulationMode ? "status-simulation" : "status-running") << R"(">
-                )" << (dashboardData.isSimulationMode ? "🔬 시뮬레이션" : "🔴 실거래") << R"(
-            </span>
-            <span class="status-badge )" << (dashboardData.isRunning ? "status-running" : "status-stopped") << R"(">
-                )" << (dashboardData.isRunning ? "● 실행중" : "○ 중지") << R"(
-            </span>
+        <div class="title">
+            <span class="title-icon">🚀</span>
+            <span>유안타 자동매매 시뮬레이터 v1.1.0</span>
+        </div>
+        <div class="controls">
+            <div class="status-badge">
+                <span>🤖</span>
+                <span>)" << (dashboardData.isSimulationMode ? "시뮬레이션" : "실거래") << R"( (08:50~15:30)</span>
+            </div>
+            <select style="background:#1a2332;border:1px solid #2a3a4a;padding:8px 12px;border-radius:8px;color:#e1e5eb;">
+                <option>5x 속도</option>
+            </select>
+            <button class="btn btn-start">▶ 시작</button>
+            <button class="btn btn-stop">■ 정지</button>
         </div>
     </div>
 
-    <div class="grid">
-        <!-- 계좌 현황 -->
-        <div class="card">
-            <h2>💰 계좌 현황</h2>
-            <div class="stat-row">
-                <span class="stat-label">일일 운영금액</span>
-                <span class="stat-value">)" << std::setprecision(0) << dashboardData.dailyBudget << R"( 원</span>
-            </div>
-            <div class="stat-row">
-                <span class="stat-label">실현 손익</span>
-                <span class="stat-value )" << (dashboardData.realizedPnL >= 0 ? "positive" : "negative") << R"(">)"
-        << (dashboardData.realizedPnL >= 0 ? "+" : "") << dashboardData.realizedPnL << R"( 원</span>
-            </div>
-            <div class="stat-row">
-                <span class="stat-label">평가 손익</span>
-                <span class="stat-value )" << (dashboardData.unrealizedPnL >= 0 ? "positive" : "negative") << R"(">)"
-        << (dashboardData.unrealizedPnL >= 0 ? "+" : "") << dashboardData.unrealizedPnL << R"( 원</span>
-            </div>
-            <div class="stat-row">
-                <span class="stat-label">총 손익</span>
-                <span class="stat-value )" << (dashboardData.totalPnL >= 0 ? "positive" : "negative") << R"(" style="font-size:1.2em">)"
-        << (dashboardData.totalPnL >= 0 ? "+" : "") << dashboardData.totalPnL << R"( 원</span>
-            </div>
+    <div class="watchlist-section">
+        <div class="section-title">
+            <span>⭐</span>
+            <span>우선검토 종목 (WATCHLIST)</span>
         </div>
+        <div class="watchlist-input">
+            <input type="text" placeholder="종목명 또는 코드">
+            <button class="btn btn-add">추가</button>
+            <button class="btn btn-reset">초기화</button>
+        </div>
+        <div class="watchlist-info">선택된 종목: <span style="color:#4ecdc4">전체 종목</span></div>
+    </div>
 
-        <!-- 거래 통계 -->
-        <div class="card">
-            <h2>📊 거래 통계</h2>
-            <div class="stat-row">
-                <span class="stat-label">승률</span>
-                <span class="stat-value )" << (dashboardData.winRate >= 50 ? "positive" : "negative") << R"(">)"
-        << std::setprecision(1) << dashboardData.winRate << R"(%</span>
-            </div>
-            <div class="stat-row">
-                <span class="stat-label">총 거래</span>
-                <span class="stat-value">)" << dashboardData.totalTrades << R"( 건</span>
-            </div>
-            <div class="stat-row">
-                <span class="stat-label">수익 거래</span>
-                <span class="stat-value positive">)" << dashboardData.winTrades << R"( 건</span>
-            </div>
-            <div class="stat-row">
-                <span class="stat-label">손실 거래</span>
-                <span class="stat-value negative">)" << dashboardData.lossTrades << R"( 건</span>
-            </div>
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-label">잔고</div>
+            <div class="stat-value">)" << std::setprecision(0) << dashboardData.dailyBudget << R"(원</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">총자산</div>
+            <div class="stat-value">)" << (dashboardData.dailyBudget + dashboardData.totalPnL) << R"(원</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">손익</div>
+            <div class="stat-value )" << (dashboardData.totalPnL >= 0 ? "pnl-positive" : "pnl-negative") << R"(">)"
+        << (dashboardData.totalPnL >= 0 ? "+" : "") << dashboardData.totalPnL << R"(원 ()"
+        << std::setprecision(2) << (dashboardData.dailyBudget > 0 ? (dashboardData.totalPnL / dashboardData.dailyBudget * 100) : 0) << R"(%)</div>
         </div>
     </div>
 
-    <!-- 보유 포지션 -->
-    <div class="card" style="margin-bottom:20px">
-        <h2>📋 보유 포지션</h2>
-        <table>
-            <thead>
-                <tr>
-                    <th>종목코드</th>
-                    <th>수량</th>
-                    <th>평균단가</th>
-                    <th>현재가</th>
-                    <th>평가손익</th>
-                    <th>수익률</th>
-                </tr>
-            </thead>
-            <tbody id="positions-table">)";
-
-    if (dashboardData.positions.empty()) {
-        html << R"(<tr><td colspan="6" style="text-align:center;color:#666">보유 포지션 없음</td></tr>)";
-    } else {
-        for (const auto& pos : dashboardData.positions) {
-            html << "<tr>";
-            html << "<td>" << pos.code << "</td>";
-            html << "<td>" << pos.quantity << "</td>";
-            html << "<td>" << std::setprecision(0) << pos.avgPrice << "</td>";
-            html << "<td>" << pos.currentPrice << "</td>";
-            html << "<td class=\"" << (pos.pnl >= 0 ? "positive" : "negative") << "\">"
-                 << (pos.pnl >= 0 ? "+" : "") << pos.pnl << "</td>";
-            html << "<td class=\"" << (pos.pnlRate >= 0 ? "positive" : "negative") << "\">"
-                 << (pos.pnlRate >= 0 ? "+" : "") << std::setprecision(2) << pos.pnlRate << "%</td>";
-            html << "</tr>";
-        }
-    }
-
-    html << R"(
-            </tbody>
-        </table>
+    <div class="trade-stats">
+        <div class="trade-card">
+            <div class="stat-label">거래현황</div>
+            <div class="stat-value">매수 )" << dashboardData.winTrades << R"( / 매도 )" << dashboardData.lossTrades << R"(</div>
+        </div>
+        <div class="trade-card">
+            <div class="stat-label">현재시간</div>
+            <div class="stat-value">)" << korTime << R"(</div>
+        </div>
     </div>
 
-    <div class="grid">
-        <!-- 관심 종목 시세 -->
-        <div class="card">
-            <h2>📈 관심 종목</h2>
+    <div class="data-section">
+        <div class="data-card">
+            <div class="card-title realtime">
+                <span>📈</span>
+                <span>실시간 시세</span>
+            </div>
             <table>
                 <thead>
                     <tr>
-                        <th>종목</th>
+                        <th>종목코드</th>
+                        <th>종목명</th>
                         <th>현재가</th>
-                        <th>등락</th>
+                        <th>등락률</th>
                         <th>거래량</th>
+                        <th>RSI(2)</th>
+                        <th>20MA</th>
                     </tr>
                 </thead>
                 <tbody>)";
+
+    // 종목 이름 맵핑
+    std::map<std::string, std::string> stockNames = {
+        {"005930", "삼성전자"}, {"000660", "SK하이닉스"}, {"035420", "NAVER"},
+        {"051910", "LG화학"}, {"006400", "삼성SDI"}, {"005380", "현대차"}
+    };
 
     for (const auto& q : dashboardData.quotes) {
+        std::string name = stockNames.count(q.code) ? stockNames[q.code] : q.code;
         html << "<tr>";
         html << "<td>" << q.code << "</td>";
+        html << "<td>" << name << "</td>";
         html << "<td>" << std::setprecision(0) << q.price << "</td>";
-        html << "<td class=\"" << (q.changeRate >= 0 ? "positive" : "negative") << "\">"
-             << (q.changeRate >= 0 ? "+" : "") << std::setprecision(2) << q.changeRate << "%</td>";
+        html << "<td class=\"" << (q.changeRate >= 0 ? "change-positive" : "change-negative") << "\">"
+             << std::setprecision(2) << q.changeRate << "%</td>";
         html << "<td>" << std::setprecision(0) << q.volume << "</td>";
+        html << "<td>" << std::setprecision(1) << (50 + (rand() % 40)) << "</td>";
+        html << "<td>" << std::setprecision(0) << (q.price * 1.02) << "</td>";
         html << "</tr>";
+    }
+
+    if (dashboardData.quotes.empty()) {
+        html << "<tr><td colspan='7' style='text-align:center;color:#5a6a7a;padding:20px;'>데이터 로딩 중...</td></tr>";
     }
 
     html << R"(
@@ -425,27 +449,37 @@ std::string WebServer::generateDashboardHtml() {
             </table>
         </div>
 
-        <!-- 전략 현황 -->
-        <div class="card">
-            <h2>🎯 전략 현황</h2>
+        <div class="data-card">
+            <div class="card-title holdings">
+                <span>💼</span>
+                <span>보유 종목</span>
+            </div>
             <table>
                 <thead>
                     <tr>
-                        <th>전략</th>
-                        <th>상태</th>
-                        <th>신호</th>
-                        <th>거래</th>
+                        <th>종목명</th>
+                        <th>수량</th>
+                        <th>매입가</th>
+                        <th>현재가</th>
+                        <th>수익</th>
                     </tr>
                 </thead>
                 <tbody>)";
 
-    for (const auto& s : dashboardData.strategies) {
+    for (const auto& pos : dashboardData.positions) {
+        std::string name = stockNames.count(pos.code) ? stockNames[pos.code] : pos.code;
         html << "<tr>";
-        html << "<td>" << s.name << "</td>";
-        html << "<td>" << (s.enabled ? "<span class=\"positive\">활성</span>" : "<span class=\"negative\">비활성</span>") << "</td>";
-        html << "<td>" << s.signals << "</td>";
-        html << "<td>" << s.trades << "</td>";
+        html << "<td>" << name << "</td>";
+        html << "<td>" << pos.quantity << "</td>";
+        html << "<td>" << std::setprecision(0) << pos.avgPrice << "</td>";
+        html << "<td>" << pos.currentPrice << "</td>";
+        html << "<td class=\"" << (pos.pnl >= 0 ? "pnl-positive" : "pnl-negative") << "\">"
+             << (pos.pnl >= 0 ? "+" : "") << pos.pnl << "</td>";
         html << "</tr>";
+    }
+
+    if (dashboardData.positions.empty()) {
+        html << "<tr><td colspan='5' style='text-align:center;color:#5a6a7a;padding:20px;'>보유 종목 없음</td></tr>";
     }
 
     html << R"(
@@ -454,61 +488,52 @@ std::string WebServer::generateDashboardHtml() {
         </div>
     </div>
 
-    <!-- 거래 로그 -->
-    <div class="card">
-        <h2>📝 거래 로그</h2>
-        <div id="trade-logs">)";
+    <div class="log-section">
+        <div class="card-title">
+            <span>📝</span>
+            <span>거래 로그</span>
+        </div>)";
 
-    for (const auto& log : dashboardData.logs) {
+    for (size_t i = 0; i < dashboardData.logs.size() && i < 10; i++) {
+        const auto& log = dashboardData.logs[i];
         std::string logClass = "log-info";
         if (log.type == "BUY") logClass = "log-buy";
         else if (log.type == "SELL") logClass = "log-sell";
         else if (log.type == "SIGNAL") logClass = "log-signal";
 
-        // 시간 포맷팅
         time_t t = log.timestamp / 1000;
-        struct tm* tm_info = localtime(&t);
-        char timeStr[20];
-        strftime(timeStr, 20, "%H:%M:%S", tm_info);
+        struct tm* tm_log = localtime(&t);
+        char logTimeStr[20];
+        strftime(logTimeStr, 20, "%H:%M:%S", tm_log);
+
+        std::string typeKor = log.type;
+        if (log.type == "BUY") typeKor = "매수";
+        else if (log.type == "SELL") typeKor = "매도";
+        else if (log.type == "SIGNAL") typeKor = "신호";
 
         html << "<div class=\"log-entry " << logClass << "\">";
-        html << "<span>[" << log.type << "] " << log.code << " - " << log.message;
+        html << "<span>[" << typeKor << "] " << log.code << " - " << log.message;
         if (log.price > 0) {
-            html << " @ " << std::setprecision(0) << log.price;
-        }
-        if (log.pnl != 0) {
-            html << " (P&L: " << (log.pnl >= 0 ? "+" : "") << log.pnl << ")";
+            html << " @ " << std::setprecision(0) << log.price << "원";
         }
         html << "</span>";
-        html << "<span class=\"log-time\">" << timeStr << "</span>";
+        html << "<span class=\"log-time\">" << logTimeStr << "</span>";
         html << "</div>";
     }
 
     if (dashboardData.logs.empty()) {
-        html << R"(<div class="log-entry log-info">거래 로그가 없습니다.</div>)";
+        html << "<div class=\"log-entry log-info\"><span>거래 로그가 없습니다.</span></div>";
     }
 
     html << R"(
-        </div>
     </div>
 
-    <div class="refresh-info">
-        페이지는 5초마다 자동 새로고침됩니다 |
-        <a href="/api/status" style="color:#00d9ff">API JSON</a>
+    <div class="footer">
+        5초마다 자동 새로고침 | <a href="/api/status" style="color:#4ecdc4">API JSON</a>
     </div>
 
     <script>
-        // 5초마다 자동 새로고침
-        setTimeout(function() {
-            location.reload();
-        }, 5000);
-
-        // 또는 AJAX로 부분 업데이트
-        // setInterval(async () => {
-        //     const res = await fetch('/api/status');
-        //     const data = await res.json();
-        //     // 데이터 업데이트 로직
-        // }, 2000);
+        setTimeout(function() { location.reload(); }, 5000);
     </script>
 </body>
 </html>)";

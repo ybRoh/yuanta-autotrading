@@ -140,7 +140,8 @@ void updateDashboard(WebServer& webServer, RiskManager& rm, StrategyManager& sm,
 
     // 포지션 정보
     auto positions = rm.getAllPositions();
-    for (const auto& pos : positions) {
+    for (const auto& pair : positions) {
+        const auto& pos = pair.second;
         DashboardData::Position p;
         p.code = pos.code;
         p.name = pos.code;  // TODO: 종목명 조회
@@ -148,7 +149,7 @@ void updateDashboard(WebServer& webServer, RiskManager& rm, StrategyManager& sm,
         p.avgPrice = pos.avgPrice;
         p.currentPrice = pos.currentPrice;
         p.pnl = (pos.currentPrice - pos.avgPrice) * pos.quantity;
-        p.pnlRate = ((pos.currentPrice - pos.avgPrice) / pos.avgPrice) * 100;
+        p.pnlRate = (pos.avgPrice > 0) ? ((pos.currentPrice - pos.avgPrice) / pos.avgPrice) * 100 : 0;
         data.positions.push_back(p);
     }
 
