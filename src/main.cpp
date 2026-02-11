@@ -208,7 +208,8 @@ int main(int argc, char* argv[]) {
         dataManager.addWatchlist(code);
 
         // 과거 데이터 로드
-        auto dailyCandles = dataManager.loadHistoricalData(code, 60);
+        dataManager.loadHistoricalData(code, 60);
+        auto dailyCandles = dataManager.getDailyCandles(code, 60);
         auto minuteCandles = dataManager.getMinuteCandles(code, 1, 100);
 
         std::cout << " (Daily: " << dailyCandles.size()
