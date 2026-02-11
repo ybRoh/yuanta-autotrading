@@ -75,7 +75,7 @@ target_link_libraries(yuanta_trading PUBLIC Threads::Threads)
 
 # Windows 전용 링크
 if(WIN32)
-    target_link_libraries(yuanta_trading PUBLIC ws2_32)
+    target_link_libraries(yuanta_trading PUBLIC ws2_32 shell32)
 endif()
 
 # 백테스트 실행 파일

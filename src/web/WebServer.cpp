@@ -3,17 +3,16 @@
 #define NOMINMAX
 #endif
 #define _CRT_SECURE_NO_WARNINGS
-#include <winsock2.h>
-#include <ws2tcpip.h>
-#pragma comment(lib, "ws2_32.lib")
+#include <windows.h>
+#include <shellapi.h>
 #endif
 
 #include "../../include/WebServer.h"
-#include "../../include/third_party/httplib.h"
 #include <sstream>
 #include <iomanip>
 #include <chrono>
 #include <ctime>
+#include <fstream>
 
 namespace yuanta {
 
@@ -71,26 +70,36 @@ void WebServer::addLog(const std::string& type, const std::string& code,
 }
 
 void WebServer::serverThread() {
-    httplib::Server svr;
-
-    // 메인 대시보드 페이지
-    svr.Get("/", [this](const httplib::Request&, httplib::Response& res) {
-        res.set_content(generateDashboardHtml(), "text/html; charset=utf-8");
-    });
-
-    // API 엔드포인트
-    svr.Get("/api/status", [this](const httplib::Request&, httplib::Response& res) {
-        res.set_header("Access-Control-Allow-Origin", "*");
-        res.set_content(generateApiResponse(), "application/json; charset=utf-8");
-    });
+    std::string htmlPath = "dashboard.html";
 
     std::cout << "\n========================================" << std::endl;
-    std::cout << "  Web Dashboard:" << std::endl;
-    std::cout << "  http://localhost:" << port << std::endl;
+    std::cout << "  Web Dashboard: dashboard.html" << std::endl;
+    std::cout << "  (Auto-updates every 2 seconds)" << std::endl;
     std::cout << "========================================\n" << std::endl;
 
+    // 처음 HTML 생성 후 브라우저에서 열기
+    {
+        std::ofstream file(htmlPath);
+        if (file.is_open()) {
+            file << generateDashboardHtml();
+            file.close();
+        }
+    }
+
+#ifdef _WIN32
+    // Windows에서 기본 브라우저로 열기
+    ShellExecuteA(NULL, "open", htmlPath.c_str(), NULL, NULL, SW_SHOWNORMAL);
+#endif
+
+    // 주기적으로 HTML 파일 업데이트
     while (running) {
-        svr.listen("0.0.0.0", port);
+        std::this_thread::sleep_for(std::chrono::seconds(2));
+
+        std::ofstream file(htmlPath);
+        if (file.is_open()) {
+            file << generateDashboardHtml();
+            file.close();
+        }
     }
 }
 
@@ -126,13 +135,12 @@ std::string WebServer::generateDashboardHtml() {
     auto now = std::chrono::system_clock::now();
     auto nowTime = std::chrono::system_clock::to_time_t(now);
     struct tm* tm_info = localtime(&nowTime);
-    char timeStr[20];
-    strftime(timeStr, 20, "%p %I:%M:%S", tm_info);
 
-    // 한국어 오전/오후
     std::string korTime = (tm_info->tm_hour < 12) ? "오전 " : "오후 ";
     char hourMin[10];
-    strftime(hourMin, 10, "%I:%M:%S", tm_info);
+    int hour12 = tm_info->tm_hour % 12;
+    if (hour12 == 0) hour12 = 12;
+    sprintf(hourMin, "%02d:%02d:%02d", hour12, tm_info->tm_min, tm_info->tm_sec);
     korTime += hourMin;
 
     std::ostringstream html;
@@ -142,8 +150,9 @@ std::string WebServer::generateDashboardHtml() {
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
+    <meta http-equiv="refresh" content="2">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>유안타 자동매매 시뮬레이터</title>
+    <title>유안타 자동매매 시뮬레이터 v1.0.1</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -168,7 +177,6 @@ std::string WebServer::generateDashboardHtml() {
             font-size: 1.5em;
             color: #4ecdc4;
         }
-        .title-icon { font-size: 1.3em; }
         .controls {
             display: flex;
             align-items: center;
@@ -194,7 +202,6 @@ std::string WebServer::generateDashboardHtml() {
         .btn-start { background: #4ecdc4; color: #0d1421; }
         .btn-stop { background: #e74c3c; color: white; opacity: 0.6; }
 
-        /* Watchlist Section */
         .watchlist-section {
             background: #141d2b;
             border-radius: 12px;
@@ -226,7 +233,6 @@ std::string WebServer::generateDashboardHtml() {
         .btn-reset { background: #e74c3c; color: white; }
         .watchlist-info { color: #4ecdc4; font-size: 0.85em; }
 
-        /* Stats Cards */
         .stats-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
@@ -247,12 +253,9 @@ std::string WebServer::generateDashboardHtml() {
             font-size: 1.8em;
             font-weight: bold;
         }
-        .stat-value.positive { color: #e74c3c; }
-        .stat-value.negative { color: #3498db; }
-        .stat-value.loss { color: #e74c3c; }
-        .stat-value.profit { color: #3498db; }
+        .stat-value.pnl-positive { color: #e74c3c; }
+        .stat-value.pnl-negative { color: #3498db; }
 
-        /* Trade Stats */
         .trade-stats {
             display: grid;
             grid-template-columns: 1fr 1fr;
@@ -265,7 +268,6 @@ std::string WebServer::generateDashboardHtml() {
             padding: 20px;
         }
 
-        /* Tables */
         .data-section {
             display: grid;
             grid-template-columns: 1.5fr 1fr;
@@ -305,10 +307,7 @@ std::string WebServer::generateDashboardHtml() {
         }
         .change-negative { color: #3498db; }
         .change-positive { color: #e74c3c; }
-        .pnl-positive { color: #e74c3c; }
-        .pnl-negative { color: #3498db; }
 
-        /* Log Section */
         .log-section {
             background: #141d2b;
             border-radius: 12px;
@@ -343,7 +342,7 @@ std::string WebServer::generateDashboardHtml() {
 <body>
     <div class="header">
         <div class="title">
-            <span class="title-icon">🚀</span>
+            <span>🚀</span>
             <span>유안타 자동매매 시뮬레이터 v1.0.1</span>
         </div>
         <div class="controls">
@@ -420,7 +419,6 @@ std::string WebServer::generateDashboardHtml() {
                 </thead>
                 <tbody>)";
 
-    // 종목 이름 맵핑
     std::map<std::string, std::string> stockNames = {
         {"005930", "삼성전자"}, {"000660", "SK하이닉스"}, {"035420", "NAVER"},
         {"051910", "LG화학"}, {"006400", "삼성SDI"}, {"005380", "현대차"}
@@ -529,12 +527,8 @@ std::string WebServer::generateDashboardHtml() {
     </div>
 
     <div class="footer">
-        5초마다 자동 새로고침 | <a href="/api/status" style="color:#4ecdc4">API JSON</a>
+        2초마다 자동 새로고침
     </div>
-
-    <script>
-        setTimeout(function() { location.reload(); }, 5000);
-    </script>
 </body>
 </html>)";
 
