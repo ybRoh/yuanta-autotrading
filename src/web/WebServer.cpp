@@ -78,11 +78,8 @@ void WebServer::checkCommands() {
         cmdFile.close();
 
         if (!command.empty()) {
-            // 명령 파일 삭제
             std::remove("command.txt");
-
             std::cout << "[WebServer] Command received: " << command << std::endl;
-
             if (commandCallback) {
                 commandCallback(command);
             }
@@ -91,16 +88,15 @@ void WebServer::checkCommands() {
 }
 
 void WebServer::serverThread() {
-    std::string htaPath = "dashboard.hta";
+    std::string htmlPath = "dashboard.html";
 
     std::cout << "\n========================================" << std::endl;
-    std::cout << "  Web Dashboard: dashboard.hta" << std::endl;
-    std::cout << "  (Auto-updates every 2 seconds)" << std::endl;
+    std::cout << "  Web Dashboard: dashboard.html" << std::endl;
+    std::cout << "  Press F5 to refresh in browser" << std::endl;
     std::cout << "========================================\n" << std::endl;
 
-    // 처음 HTA 생성 후 실행
     {
-        std::ofstream file(htaPath);
+        std::ofstream file(htmlPath);
         if (file.is_open()) {
             file << generateDashboardHtml();
             file.close();
@@ -108,15 +104,13 @@ void WebServer::serverThread() {
     }
 
 #ifdef _WIN32
-    // Windows에서 HTA 실행
-    ShellExecuteA(NULL, "open", htaPath.c_str(), NULL, NULL, SW_SHOWNORMAL);
+    ShellExecuteA(NULL, "open", htmlPath.c_str(), NULL, NULL, SW_SHOWNORMAL);
 #endif
 
-    // 주기적으로 HTA 파일 업데이트
     while (running) {
         std::this_thread::sleep_for(std::chrono::seconds(2));
 
-        std::ofstream file(htaPath);
+        std::ofstream file(htmlPath);
         if (file.is_open()) {
             file << generateDashboardHtml();
             file.close();
@@ -152,333 +146,90 @@ std::string WebServer::generateApiResponse() {
 std::string WebServer::generateDashboardHtml() {
     std::lock_guard<std::mutex> lock(dataMutex);
 
-    // 현재 시간
     auto now = std::chrono::system_clock::now();
     auto nowTime = std::chrono::system_clock::to_time_t(now);
     struct tm* tm_info = localtime(&nowTime);
 
-    std::string korTime = (tm_info->tm_hour < 12) ? "AM " : "PM ";
+    std::string timeStr = (tm_info->tm_hour < 12) ? "AM " : "PM ";
     char hourMin[10];
     int hour12 = tm_info->tm_hour % 12;
     if (hour12 == 0) hour12 = 12;
     sprintf(hourMin, "%02d:%02d:%02d", hour12, tm_info->tm_min, tm_info->tm_sec);
-    korTime += hourMin;
+    timeStr += hourMin;
 
     std::ostringstream html;
     html << std::fixed;
 
-    html << R"(<html>
-<head>
-    <meta charset="UTF-8">
-    <meta http-equiv="refresh" content="2">
-    <meta http-equiv="x-ua-compatible" content="ie=edge">
-    <title>Yuanta AutoTrading v1.0.4</title>
-    <HTA:APPLICATION
-        ID="YuantaTrading"
-        APPLICATIONNAME="Yuanta AutoTrading"
-        BORDER="thin"
-        BORDERSTYLE="normal"
-        INNERBORDER="no"
-        MAXIMIZEBUTTON="yes"
-        MINIMIZEBUTTON="yes"
-        SCROLL="yes"
-        SCROLLFLAT="yes"
-        SINGLEINSTANCE="yes"
-        SYSMENU="yes"
-        WINDOWSTATE="normal"
-    />
-    <script language="VBScript">
-        Sub SendCommand(cmd)
-            Dim fso, f
-            Set fso = CreateObject("Scripting.FileSystemObject")
-            Set f = fso.CreateTextFile("command.txt", True)
-            f.WriteLine cmd
-            f.Close
-        End Sub
-    </script>
-    <script language="JavaScript">
-        function startTrading() {
-            SendCommand('START');
-            document.getElementById('statusText').innerText = 'Start command sent...';
-        }
-        function stopTrading() {
-            SendCommand('STOP');
-            document.getElementById('statusText').innerText = 'Stop command sent...';
-        }
-        function addWatchlist() {
-            var code = document.getElementById('watchlistInput').value;
-            if (code) {
-                SendCommand('ADD_WATCHLIST:' + code);
-                document.getElementById('watchlistInput').value = '';
-            }
-        }
-        function resetWatchlist() {
-            SendCommand('RESET_WATCHLIST');
-        }
-    </script>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body {
-            font-family: 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif;
-            background: #0d1421;
-            color: #e1e5eb;
-            min-height: 100vh;
-            padding: 20px;
-        }
-        .header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            margin-bottom: 25px;
-            flex-wrap: wrap;
-            gap: 15px;
-        }
-        .title {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            font-size: 1.5em;
-            color: #4ecdc4;
-        }
-        .controls {
-            display: flex;
-            align-items: center;
-            gap: 15px;
-        }
-        .status-badge {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            padding: 8px 15px;
-            background: #1a2332;
-            border-radius: 20px;
-            font-size: 0.9em;
-        }
-        .btn {
-            padding: 10px 25px;
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
-            font-weight: bold;
-            font-size: 0.95em;
-        }
-        .btn-start { background: #4ecdc4; color: #0d1421; }
-        .btn-stop { background: #e74c3c; color: white; opacity: 0.6; }
+    // HTML header
+    html << "<!DOCTYPE html>\n";
+    html << "<html lang=\"en\">\n";
+    html << "<head>\n";
+    html << "    <meta charset=\"UTF-8\">\n";
+    html << "    <meta http-equiv=\"refresh\" content=\"2\">\n";
+    html << "    <title>Yuanta AutoTrading v1.0.4</title>\n";
+    html << "    <style>\n";
+    html << "        * { margin: 0; padding: 0; box-sizing: border-box; }\n";
+    html << "        body { font-family: Arial, sans-serif; background: #0d1421; color: #e1e5eb; padding: 20px; }\n";
+    html << "        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px; }\n";
+    html << "        .title { font-size: 1.5em; color: #4ecdc4; }\n";
+    html << "        .status { padding: 8px 15px; background: #1a2332; border-radius: 20px; }\n";
+    html << "        .trading-active { color: #2ecc71; }\n";
+    html << "        .trading-inactive { color: #e74c3c; }\n";
+    html << "        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px; }\n";
+    html << "        .stat-card { background: #141d2b; border-radius: 12px; padding: 20px; }\n";
+    html << "        .stat-label { color: #7a8a9a; font-size: 0.85em; margin-bottom: 8px; }\n";
+    html << "        .stat-value { font-size: 1.5em; font-weight: bold; }\n";
+    html << "        .positive { color: #e74c3c; }\n";
+    html << "        .negative { color: #3498db; }\n";
+    html << "        .data-section { display: grid; grid-template-columns: 1.5fr 1fr; gap: 20px; margin-bottom: 20px; }\n";
+    html << "        .data-card { background: #141d2b; border-radius: 12px; padding: 20px; }\n";
+    html << "        .card-title { color: #f1c40f; margin-bottom: 15px; }\n";
+    html << "        table { width: 100%; border-collapse: collapse; }\n";
+    html << "        th { text-align: left; padding: 10px 8px; color: #7a8a9a; font-weight: normal; border-bottom: 1px solid #2a3a4a; }\n";
+    html << "        td { padding: 12px 8px; border-bottom: 1px solid #1a2a3a; }\n";
+    html << "        .log-section { background: #141d2b; border-radius: 12px; padding: 20px; }\n";
+    html << "        .log-entry { padding: 8px 12px; margin: 5px 0; border-radius: 6px; display: flex; justify-content: space-between; }\n";
+    html << "        .log-buy { background: rgba(231,76,60,0.15); border-left: 3px solid #e74c3c; }\n";
+    html << "        .log-sell { background: rgba(52,152,219,0.15); border-left: 3px solid #3498db; }\n";
+    html << "        .log-info { background: rgba(127,140,141,0.15); border-left: 3px solid #7f8c8d; }\n";
+    html << "        .footer { text-align: center; color: #5a6a7a; margin-top: 20px; }\n";
+    html << "        @media (max-width: 768px) { .data-section { grid-template-columns: 1fr; } }\n";
+    html << "    </style>\n";
+    html << "</head>\n";
+    html << "<body>\n";
 
-        .watchlist-section {
-            background: #141d2b;
-            border-radius: 12px;
-            padding: 20px;
-            margin-bottom: 20px;
-        }
-        .section-title {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            color: #f1c40f;
-            font-size: 1em;
-            margin-bottom: 15px;
-        }
-        .watchlist-input {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 10px;
-        }
-        .watchlist-input input {
-            background: #1a2332;
-            border: 1px solid #2a3a4a;
-            padding: 10px 15px;
-            border-radius: 8px;
-            color: #7a8a9a;
-            width: 200px;
-        }
-        .btn-add { background: #3a4a5a; color: white; }
-        .btn-reset { background: #e74c3c; color: white; }
-        .watchlist-info { color: #4ecdc4; font-size: 0.85em; }
+    // Header
+    html << "    <div class=\"header\">\n";
+    html << "        <div class=\"title\">Yuanta AutoTrading v1.0.4</div>\n";
+    html << "        <div class=\"status\">\n";
+    html << "            <span>" << (dashboardData.isSimulationMode ? "SIMULATION" : "LIVE") << "</span> | \n";
+    html << "            <span class=\"" << (tradingActive ? "trading-active" : "trading-inactive") << "\">";
+    html << (tradingActive ? "[ON] Trading Active" : "[OFF] Standby") << "</span>\n";
+    html << "        </div>\n";
+    html << "    </div>\n";
 
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 15px;
-            margin-bottom: 20px;
-        }
-        .stat-card {
-            background: #141d2b;
-            border-radius: 12px;
-            padding: 20px;
-        }
-        .stat-label {
-            color: #7a8a9a;
-            font-size: 0.85em;
-            margin-bottom: 8px;
-        }
-        .stat-value {
-            font-size: 1.8em;
-            font-weight: bold;
-        }
-        .stat-value.pnl-positive { color: #e74c3c; }
-        .stat-value.pnl-negative { color: #3498db; }
+    // Stats grid
+    html << "    <div class=\"stats-grid\">\n";
+    html << "        <div class=\"stat-card\"><div class=\"stat-label\">Balance</div>";
+    html << "<div class=\"stat-value\">" << std::setprecision(0) << dashboardData.dailyBudget << " KRW</div></div>\n";
+    html << "        <div class=\"stat-card\"><div class=\"stat-label\">Total Assets</div>";
+    html << "<div class=\"stat-value\">" << (dashboardData.dailyBudget + dashboardData.totalPnL) << " KRW</div></div>\n";
+    html << "        <div class=\"stat-card\"><div class=\"stat-label\">P&L</div>";
+    html << "<div class=\"stat-value " << (dashboardData.totalPnL >= 0 ? "positive" : "negative") << "\">";
+    html << (dashboardData.totalPnL >= 0 ? "+" : "") << dashboardData.totalPnL << " KRW</div></div>\n";
+    html << "        <div class=\"stat-card\"><div class=\"stat-label\">Time</div>";
+    html << "<div class=\"stat-value\">" << timeStr << "</div></div>\n";
+    html << "    </div>\n";
 
-        .trade-stats {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 15px;
-            margin-bottom: 20px;
-        }
-        .trade-card {
-            background: #141d2b;
-            border-radius: 12px;
-            padding: 20px;
-        }
+    // Data section
+    html << "    <div class=\"data-section\">\n";
 
-        .data-section {
-            display: grid;
-            grid-template-columns: 1.5fr 1fr;
-            gap: 20px;
-            margin-bottom: 20px;
-        }
-        .data-card {
-            background: #141d2b;
-            border-radius: 12px;
-            padding: 20px;
-        }
-        .card-title {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            font-size: 1em;
-            margin-bottom: 15px;
-        }
-        .card-title.realtime { color: #e74c3c; }
-        .card-title.holdings { color: #f39c12; }
-        table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-        th {
-            text-align: left;
-            padding: 10px 8px;
-            color: #7a8a9a;
-            font-weight: normal;
-            font-size: 0.85em;
-            border-bottom: 1px solid #2a3a4a;
-        }
-        td {
-            padding: 12px 8px;
-            border-bottom: 1px solid #1a2a3a;
-            font-size: 0.9em;
-        }
-        .change-negative { color: #3498db; }
-        .change-positive { color: #e74c3c; }
-
-        .log-section {
-            background: #141d2b;
-            border-radius: 12px;
-            padding: 20px;
-        }
-        .log-entry {
-            padding: 10px 12px;
-            margin: 5px 0;
-            border-radius: 6px;
-            display: flex;
-            justify-content: space-between;
-            font-size: 0.85em;
-        }
-        .log-buy { background: rgba(231,76,60,0.15); border-left: 3px solid #e74c3c; }
-        .log-sell { background: rgba(52,152,219,0.15); border-left: 3px solid #3498db; }
-        .log-signal { background: rgba(78,205,196,0.15); border-left: 3px solid #4ecdc4; }
-        .log-info { background: rgba(127,140,141,0.15); border-left: 3px solid #7f8c8d; }
-        .log-time { color: #7a8a9a; }
-
-        .footer {
-            text-align: center;
-            color: #5a6a7a;
-            font-size: 0.8em;
-            margin-top: 20px;
-        }
-
-        @media (max-width: 900px) {
-            .data-section { grid-template-columns: 1fr; }
-        }
-    </style>
-</head>
-<body>
-    <div class="header">
-        <div class="title">
-            <span>[T]</span>
-            <span>Yuanta AutoTrading v1.0.4</span>
-        </div>
-        <div class="controls">
-            <div class="status-badge">
-                <span>[S]</span>
-                <span>)" << (dashboardData.isSimulationMode ? "SIMULATION" : "LIVE") << R"( (08:50~15:30)</span>
-            </div>
-            <span id="statusText" style="color:#f1c40f;font-size:0.9em;">)" << (tradingActive ? "[ON] Trading Active" : "[OFF] Standby") << R"(</span>
-            <button class="btn btn-start" onclick="startTrading()">START</button>
-            <button class="btn btn-stop" onclick="stopTrading()">STOP</button>
-        </div>
-    </div>
-
-    <div class="watchlist-section">
-        <div class="section-title">
-            <span>[*]</span>
-            <span>WATCHLIST</span>
-        </div>
-        <div class="watchlist-input">
-            <input type="text" id="watchlistInput" placeholder="Stock Code (e.g. 005930)">
-            <button class="btn btn-add" onclick="addWatchlist()">Add</button>
-            <button class="btn btn-reset" onclick="resetWatchlist()">Reset</button>
-        </div>
-        <div class="watchlist-info">Selected: <span style="color:#4ecdc4">All Stocks</span></div>
-    </div>
-
-    <div class="stats-grid">
-        <div class="stat-card">
-            <div class="stat-label">Balance</div>
-            <div class="stat-value">)" << std::setprecision(0) << dashboardData.dailyBudget << R"( KRW</div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-label">Total Assets</div>
-            <div class="stat-value">)" << (dashboardData.dailyBudget + dashboardData.totalPnL) << R"( KRW</div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-label">P&L</div>
-            <div class="stat-value )" << (dashboardData.totalPnL >= 0 ? "pnl-positive" : "pnl-negative") << R"(">)"
-        << (dashboardData.totalPnL >= 0 ? "+" : "") << dashboardData.totalPnL << R"( KRW ()"
-        << std::setprecision(2) << (dashboardData.dailyBudget > 0 ? (dashboardData.totalPnL / dashboardData.dailyBudget * 100) : 0) << R"(%)</div>
-        </div>
-    </div>
-
-    <div class="trade-stats">
-        <div class="trade-card">
-            <div class="stat-label">Trades</div>
-            <div class="stat-value">Buy )" << dashboardData.winTrades << R"( / Sell )" << dashboardData.lossTrades << R"(</div>
-        </div>
-        <div class="trade-card">
-            <div class="stat-label">Time</div>
-            <div class="stat-value">)" << korTime << R"(</div>
-        </div>
-    </div>
-
-    <div class="data-section">
-        <div class="data-card">
-            <div class="card-title realtime">
-                <span>[Q]</span>
-                <span>Real-time Quotes</span>
-            </div>
-            <table>
-                <thead>
-                    <tr>
-                        <th>Code</th>
-                        <th>Name</th>
-                        <th>Price</th>
-                        <th>Change</th>
-                        <th>Volume</th>
-                        <th>RSI(2)</th>
-                        <th>20MA</th>
-                    </tr>
-                </thead>
-                <tbody>)";
+    // Quotes table
+    html << "        <div class=\"data-card\">\n";
+    html << "            <div class=\"card-title\">Real-time Quotes</div>\n";
+    html << "            <table>\n";
+    html << "                <thead><tr><th>Code</th><th>Name</th><th>Price</th><th>Change</th><th>Volume</th></tr></thead>\n";
+    html << "                <tbody>\n";
 
     std::map<std::string, std::string> stockNames = {
         {"005930", "Samsung"}, {"000660", "SK Hynix"}, {"035420", "NAVER"},
@@ -487,106 +238,87 @@ std::string WebServer::generateDashboardHtml() {
 
     for (const auto& q : dashboardData.quotes) {
         std::string name = stockNames.count(q.code) ? stockNames[q.code] : q.code;
-        html << "<tr>";
+        html << "                <tr>";
         html << "<td>" << q.code << "</td>";
         html << "<td>" << name << "</td>";
         html << "<td>" << std::setprecision(0) << q.price << "</td>";
-        html << "<td class=\"" << (q.changeRate >= 0 ? "change-positive" : "change-negative") << "\">"
-             << std::setprecision(2) << q.changeRate << "%</td>";
+        html << "<td class=\"" << (q.changeRate >= 0 ? "positive" : "negative") << "\">";
+        html << std::setprecision(2) << q.changeRate << "%</td>";
         html << "<td>" << std::setprecision(0) << q.volume << "</td>";
-        html << "<td>" << std::setprecision(1) << (50 + (rand() % 40)) << "</td>";
-        html << "<td>" << std::setprecision(0) << (q.price * 1.02) << "</td>";
-        html << "</tr>";
+        html << "</tr>\n";
     }
 
     if (dashboardData.quotes.empty()) {
-        html << "<tr><td colspan='7' style='text-align:center;color:#5a6a7a;padding:20px;'>Loading data...</td></tr>";
+        html << "                <tr><td colspan=\"5\" style=\"text-align:center;color:#5a6a7a;\">Loading...</td></tr>\n";
     }
 
-    html << R"(
-                </tbody>
-            </table>
-        </div>
+    html << "                </tbody>\n";
+    html << "            </table>\n";
+    html << "        </div>\n";
 
-        <div class="data-card">
-            <div class="card-title holdings">
-                <span>[P]</span>
-                <span>Positions</span>
-            </div>
-            <table>
-                <thead>
-                    <tr>
-                        <th>Name</th>
-                        <th>Qty</th>
-                        <th>Avg Price</th>
-                        <th>Current</th>
-                        <th>P&L</th>
-                    </tr>
-                </thead>
-                <tbody>)";
+    // Positions table
+    html << "        <div class=\"data-card\">\n";
+    html << "            <div class=\"card-title\">Positions</div>\n";
+    html << "            <table>\n";
+    html << "                <thead><tr><th>Name</th><th>Qty</th><th>Avg</th><th>Current</th><th>P&L</th></tr></thead>\n";
+    html << "                <tbody>\n";
 
     for (const auto& pos : dashboardData.positions) {
         std::string name = stockNames.count(pos.code) ? stockNames[pos.code] : pos.code;
-        html << "<tr>";
+        html << "                <tr>";
         html << "<td>" << name << "</td>";
         html << "<td>" << pos.quantity << "</td>";
         html << "<td>" << std::setprecision(0) << pos.avgPrice << "</td>";
         html << "<td>" << pos.currentPrice << "</td>";
-        html << "<td class=\"" << (pos.pnl >= 0 ? "pnl-positive" : "pnl-negative") << "\">"
-             << (pos.pnl >= 0 ? "+" : "") << pos.pnl << "</td>";
-        html << "</tr>";
+        html << "<td class=\"" << (pos.pnl >= 0 ? "positive" : "negative") << "\">";
+        html << (pos.pnl >= 0 ? "+" : "") << pos.pnl << "</td>";
+        html << "</tr>\n";
     }
 
     if (dashboardData.positions.empty()) {
-        html << "<tr><td colspan='5' style='text-align:center;color:#5a6a7a;padding:20px;'>No positions</td></tr>";
+        html << "                <tr><td colspan=\"5\" style=\"text-align:center;color:#5a6a7a;\">No positions</td></tr>\n";
     }
 
-    html << R"(
-                </tbody>
-            </table>
-        </div>
-    </div>
+    html << "                </tbody>\n";
+    html << "            </table>\n";
+    html << "        </div>\n";
+    html << "    </div>\n";
 
-    <div class="log-section">
-        <div class="card-title">
-            <span>[L]</span>
-            <span>Trade Log</span>
-        </div>)";
+    // Log section
+    html << "    <div class=\"log-section\">\n";
+    html << "        <div class=\"card-title\">Trade Log</div>\n";
 
     for (size_t i = 0; i < dashboardData.logs.size() && i < 10; i++) {
         const auto& log = dashboardData.logs[i];
         std::string logClass = "log-info";
         if (log.type == "BUY") logClass = "log-buy";
         else if (log.type == "SELL") logClass = "log-sell";
-        else if (log.type == "SIGNAL") logClass = "log-signal";
 
         time_t t = log.timestamp / 1000;
         struct tm* tm_log = localtime(&t);
         char logTimeStr[20];
         strftime(logTimeStr, 20, "%H:%M:%S", tm_log);
 
-        html << "<div class=\"log-entry " << logClass << "\">";
+        html << "        <div class=\"log-entry " << logClass << "\">";
         html << "<span>[" << log.type << "] " << log.code << " - " << log.message;
         if (log.price > 0) {
             html << " @ " << std::setprecision(0) << log.price << " KRW";
         }
         html << "</span>";
-        html << "<span class=\"log-time\">" << logTimeStr << "</span>";
-        html << "</div>";
+        html << "<span>" << logTimeStr << "</span>";
+        html << "</div>\n";
     }
 
     if (dashboardData.logs.empty()) {
-        html << "<div class=\"log-entry log-info\"><span>No trade logs.</span></div>";
+        html << "        <div class=\"log-entry log-info\"><span>No trade logs</span></div>\n";
     }
 
-    html << R"(
-    </div>
+    html << "    </div>\n";
 
-    <div class="footer">
-        Auto-refresh every 2 seconds
-    </div>
-</body>
-</html>)";
+    // Footer
+    html << "    <div class=\"footer\">Auto-refresh every 2 seconds | Use console to control trading</div>\n";
+    html << "</body>\n";
+    html << "</html>\n";
 
     return html.str();
 }
