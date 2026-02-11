@@ -3,8 +3,15 @@
 
 #include <string>
 #include <map>
+#include <vector>
 #include <chrono>
 #include <mutex>
+
+#ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#endif
 
 namespace yuanta {
 

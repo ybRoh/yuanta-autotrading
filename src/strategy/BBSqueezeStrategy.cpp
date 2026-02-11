@@ -77,7 +77,7 @@ SignalInfo BBSqueezeStrategy::analyze(const std::string& code,
 
     // 또는 고정 손절
     double fixedStopLoss = currentPrice * (1.0 - stopLossPercent / 100.0);
-    signal.stopLoss = std::max(signal.stopLoss, fixedStopLoss);
+    signal.stopLoss = (std::max)(signal.stopLoss, fixedStopLoss);
 
     signal.takeProfit1 = calculateTarget(currentBB, atr);
     signal.confidence = 0.62;  // 60-65% 승률

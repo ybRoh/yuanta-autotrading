@@ -254,8 +254,8 @@ std::vector<CandleData> YuantaAPI::getMinuteCandles(const std::string& code,
         double change = (rand() % 200 - 100) / 10000.0;
         candle.open = basePrice;
         candle.close = basePrice * (1 + change);
-        candle.high = std::max(candle.open, candle.close) * 1.002;
-        candle.low = std::min(candle.open, candle.close) * 0.998;
+        candle.high = (std::max)(candle.open, candle.close) * 1.002;
+        candle.low = (std::min)(candle.open, candle.close) * 0.998;
         candle.volume = 1000 + rand() % 9000;
 
         basePrice = candle.close;
@@ -289,8 +289,8 @@ std::vector<CandleData> YuantaAPI::getDailyCandles(const std::string& code, int 
         double change = (rand() % 600 - 300) / 10000.0;
         candle.open = basePrice;
         candle.close = basePrice * (1 + change);
-        candle.high = std::max(candle.open, candle.close) * 1.01;
-        candle.low = std::min(candle.open, candle.close) * 0.99;
+        candle.high = (std::max)(candle.open, candle.close) * 1.01;
+        candle.low = (std::min)(candle.open, candle.close) * 0.99;
         candle.volume = 100000 + rand() % 900000;
 
         basePrice = candle.close;

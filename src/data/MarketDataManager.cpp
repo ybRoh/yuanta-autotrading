@@ -3,7 +3,9 @@
 #include <fstream>
 #include <sstream>
 #include <ctime>
+#include <chrono>
 #include <iomanip>
+#include <algorithm>
 
 namespace yuanta {
 
@@ -119,7 +121,7 @@ std::vector<OHLCV> MarketDataManager::getMinuteCandles(const std::string& code,
         return {};
     }
 
-    size_t actualCount = std::min(static_cast<size_t>(count), candleSource->size());
+    size_t actualCount = (std::min)(static_cast<size_t>(count), candleSource->size());
     std::vector<OHLCV> result;
 
     for (size_t i = candleSource->size() - actualCount; i < candleSource->size(); ++i) {
@@ -138,7 +140,7 @@ std::vector<OHLCV> MarketDataManager::getDailyCandles(const std::string& code,
         return {};
     }
 
-    size_t actualCount = std::min(static_cast<size_t>(count),
+    size_t actualCount = (std::min)(static_cast<size_t>(count),
                                   it->second.dailyCandles.size());
     std::vector<OHLCV> result;
 
@@ -207,8 +209,8 @@ void MarketDataManager::updateCurrentCandle(StockData& data, const QuoteData& qu
         lastTime = currentSlot;
     } else {
         // 현재 봉 업데이트
-        currentCandle.high = std::max(currentCandle.high, quote.currentPrice);
-        currentCandle.low = std::min(currentCandle.low, quote.currentPrice);
+        currentCandle.high = (std::max)(currentCandle.high, quote.currentPrice);
+        currentCandle.low = (std::min)(currentCandle.low, quote.currentPrice);
         currentCandle.close = quote.currentPrice;
         currentCandle.volume = quote.volume;
     }

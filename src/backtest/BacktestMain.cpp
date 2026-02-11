@@ -137,8 +137,8 @@ public:
             candle.open = basePrice;
             basePrice *= (1.0 + change);
             candle.close = basePrice;
-            candle.high = std::max(candle.open, candle.close) * (1.0 + (rand() % 30) / 10000.0);
-            candle.low = std::min(candle.open, candle.close) * (1.0 - (rand() % 30) / 10000.0);
+            candle.high = (std::max)(candle.open, candle.close) * (1.0 + (rand() % 30) / 10000.0);
+            candle.low = (std::min)(candle.open, candle.close) * (1.0 - (rand() % 30) / 10000.0);
             candle.volume = 10000 + rand() % 90000;
 
             // 거래량 스파이크
@@ -334,9 +334,9 @@ private:
                 equityCurve.push_back({candles[i].timestamp, equity});
 
                 // 최대 낙폭 계산
-                peakEquity = std::max(peakEquity, equity);
+                peakEquity = (std::max)(peakEquity, equity);
                 double drawdown = (peakEquity - equity) / peakEquity;
-                maxDrawdown = std::max(maxDrawdown, drawdown);
+                maxDrawdown = (std::max)(maxDrawdown, drawdown);
             }
         }
 

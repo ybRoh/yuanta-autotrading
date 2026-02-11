@@ -5,8 +5,12 @@
 #include <functional>
 #include <vector>
 #include <map>
+#include <memory>
 
 #ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
 #include <windows.h>
 #else
 // Cross-platform placeholder for development/testing

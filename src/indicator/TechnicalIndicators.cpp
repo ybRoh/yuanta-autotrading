@@ -402,7 +402,7 @@ double TechnicalIndicators::TrueRange(const OHLCV& current, const OHLCV& previou
     double hl = current.high - current.low;
     double hpc = std::abs(current.high - previous.close);
     double lpc = std::abs(current.low - previous.close);
-    return std::max({hl, hpc, lpc});
+    return (std::max)({hl, hpc, lpc});
 }
 
 double TechnicalIndicators::ATR(const std::vector<OHLCV>& candles, int period) {
@@ -488,18 +488,18 @@ bool TechnicalIndicators::isBollingerSqueeze(const std::vector<BollingerBands>& 
 
 double TechnicalIndicators::Highest(const std::vector<double>& prices, int period) {
     if (prices.size() < static_cast<size_t>(period)) {
-        return prices.empty() ? 0.0 : *std::max_element(prices.begin(), prices.end());
+        return prices.empty() ? 0.0 : *(std::max)_element(prices.begin(), prices.end());
     }
 
-    return *std::max_element(prices.end() - period, prices.end());
+    return *(std::max)_element(prices.end() - period, prices.end());
 }
 
 double TechnicalIndicators::Lowest(const std::vector<double>& prices, int period) {
     if (prices.size() < static_cast<size_t>(period)) {
-        return prices.empty() ? 0.0 : *std::min_element(prices.begin(), prices.end());
+        return prices.empty() ? 0.0 : *(std::min)_element(prices.begin(), prices.end());
     }
 
-    return *std::min_element(prices.end() - period, prices.end());
+    return *(std::min)_element(prices.end() - period, prices.end());
 }
 
 double TechnicalIndicators::ROC(const std::vector<double>& prices, int period) {
@@ -538,8 +538,8 @@ TechnicalIndicators::Stochastic TechnicalIndicators::StochasticOscillator(
         double lowest = candles[i].low;
 
         for (size_t j = i - kPeriod + 1; j < i; ++j) {
-            highest = std::max(highest, candles[j].high);
-            lowest = std::min(lowest, candles[j].low);
+            highest = (std::max)(highest, candles[j].high);
+            lowest = (std::min)(lowest, candles[j].low);
         }
 
         double k = 50.0;

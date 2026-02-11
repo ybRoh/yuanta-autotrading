@@ -3,14 +3,24 @@
 
 #include <vector>
 #include <deque>
+#include <map>
+#include <string>
 #include <cmath>
 #include <algorithm>
 #include <numeric>
+
+// Windows min/max 매크로 충돌 방지
+#ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#endif
 
 namespace yuanta {
 
 // OHLCV 데이터 구조체
 struct OHLCV {
+    std::string code;
     double open;
     double high;
     double low;

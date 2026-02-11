@@ -98,7 +98,7 @@ int RiskManager::calculatePositionSize(double price) const {
     double maxPosition = config.getMaxPositionSize();
     int quantity = static_cast<int>(maxPosition / price);
 
-    return std::max(1, quantity);
+    return (std::max)(1, quantity);
 }
 
 int RiskManager::calculateMaxQuantity(const std::string& code, double price) const {
@@ -113,7 +113,7 @@ int RiskManager::calculateMaxQuantity(const std::string& code, double price) con
     }
 
     double remainingBudget = config.dailyBudget - totalInvested;
-    double maxPosition = std::min(remainingBudget, config.getMaxPositionSize());
+    double maxPosition = (std::min)(remainingBudget, config.getMaxPositionSize());
 
     return static_cast<int>(maxPosition / price);
 }
@@ -154,7 +154,7 @@ void RiskManager::closePosition(const std::string& code, double closePrice, int 
     if (it == positions.end()) return;
 
     Position& pos = it->second;
-    int closeQty = std::min(quantity, pos.quantity);
+    int closeQty = (std::min)(quantity, pos.quantity);
 
     // 손익 계산
     double pnl = (closePrice - pos.avgPrice) * closeQty;
@@ -188,7 +188,7 @@ void RiskManager::closePosition(const std::string& code, double closePrice, int 
 
     // 자산 업데이트
     currentEquity = config.dailyBudget + realizedPnL + getUnrealizedPnL();
-    peakEquity = std::max(peakEquity, currentEquity);
+    peakEquity = (std::max)(peakEquity, currentEquity);
 }
 
 Position* RiskManager::getPosition(const std::string& code) {
