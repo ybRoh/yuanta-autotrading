@@ -21,6 +21,7 @@ using namespace yuanta;
 
 // 전역 상태
 std::atomic<bool> running{true};
+std::atomic<bool> tradingActive{false};  // 매매 활성화 상태
 WebServer* g_webServer = nullptr;
 
 // 시그널 핸들러
@@ -342,9 +343,34 @@ int main(int argc, char* argv[]) {
     WebServer webServer(config.webPort);
     g_webServer = &webServer;
 
+    // 명령 콜백 설정
+    webServer.setCommandCallback([&](const std::string& cmd) {
+        if (cmd == "START") {
+            tradingActive = true;
+            webServer.setTradingActive(true);
+            std::cout << "\n*** 매매 시작! ***\n" << std::endl;
+            webServer.addLog("INFO", "", "Trading started", 0, 0, 0);
+        } else if (cmd == "STOP") {
+            tradingActive = false;
+            webServer.setTradingActive(false);
+            std::cout << "\n*** 매매 정지 ***\n" << std::endl;
+            webServer.addLog("INFO", "", "Trading stopped", 0, 0, 0);
+        } else if (cmd.find("ADD_WATCHLIST:") == 0) {
+            std::string code = cmd.substr(14);
+            config.watchlist.push_back(code);
+            dataManager.addWatchlist(code);
+            std::cout << "Watchlist added: " << code << std::endl;
+            webServer.addLog("INFO", code, "Added to watchlist", 0, 0, 0);
+        } else if (cmd == "RESET_WATCHLIST") {
+            config.watchlist = {"005930", "000660", "035420", "051910", "006400"};
+            std::cout << "Watchlist reset to default" << std::endl;
+            webServer.addLog("INFO", "", "Watchlist reset", 0, 0, 0);
+        }
+    });
+
     if (config.enableWebDashboard) {
         webServer.start();
-        webServer.addLog("INFO", "", "System started", 0, 0, 0);
+        webServer.addLog("INFO", "", "System started - Press START to begin trading", 0, 0, 0);
     }
 
     // 8. 실시간 시세 시작
@@ -360,6 +386,9 @@ int main(int argc, char* argv[]) {
     // 9. 메인 루프
     int loopCount = 0;
     while (running) {
+        // 명령 파일 체크
+        webServer.checkCommands();
+
         // 장 시간 체크
         if (!api.isSimulationMode() && !dataManager.isMarketOpen()) {
             if (loopCount % 60 == 0) {
@@ -370,11 +399,24 @@ int main(int argc, char* argv[]) {
             continue;
         }
 
+        // 매매 비활성화 상태면 대기
+        if (!tradingActive) {
+            // 대시보드 업데이트는 계속
+            if (loopCount % 2 == 0) {
+                updateDashboard(webServer, riskManager, strategyManager, dataManager, api, config, startTime);
+            }
+            std::this_thread::sleep_for(std::chrono::seconds(1));
+            loopCount++;
+            continue;
+        }
+
         // 일일 손실 한도 체크
         if (riskManager.isDailyLossLimitReached()) {
             std::cout << "Daily loss limit reached. Closing all positions..." << std::endl;
             webServer.addLog("ALERT", "", "Daily loss limit reached", 0, 0, riskManager.getTotalPnL());
             orderExecutor.closeAllPositions();
+            tradingActive = false;
+            webServer.setTradingActive(false);
             std::this_thread::sleep_for(std::chrono::seconds(60));
             continue;
         }
@@ -384,6 +426,8 @@ int main(int argc, char* argv[]) {
             std::cout << "Market close approaching. Closing all positions..." << std::endl;
             webServer.addLog("ALERT", "", "Force close time reached", 0, 0, 0);
             orderExecutor.closeAllPositions();
+            tradingActive = false;
+            webServer.setTradingActive(false);
             std::this_thread::sleep_for(std::chrono::seconds(60));
             continue;
         }

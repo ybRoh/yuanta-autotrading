@@ -100,10 +100,22 @@ public:
     void setPort(int port) { this->port = port; }
     int getPort() const { return port; }
 
+    // 명령 처리
+    using CommandCallback = std::function<void(const std::string&)>;
+    void setCommandCallback(CommandCallback callback) { commandCallback = callback; }
+    void checkCommands();  // 명령 파일 확인 (메인 루프에서 호출)
+
+    // 거래 상태
+    void setTradingActive(bool active) { tradingActive = active; }
+    bool isTradingActive() const { return tradingActive; }
+
 private:
     void serverThread();
     std::string generateDashboardHtml();
     std::string generateApiResponse();
+
+    CommandCallback commandCallback;
+    std::atomic<bool> tradingActive{false};
 
     int port;
     std::atomic<bool> running{false};

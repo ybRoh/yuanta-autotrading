@@ -70,17 +70,37 @@ void WebServer::addLog(const std::string& type, const std::string& code,
     addLog(entry);
 }
 
+void WebServer::checkCommands() {
+    std::ifstream cmdFile("command.txt");
+    if (cmdFile.is_open()) {
+        std::string command;
+        std::getline(cmdFile, command);
+        cmdFile.close();
+
+        if (!command.empty()) {
+            // 명령 파일 삭제
+            std::remove("command.txt");
+
+            std::cout << "[WebServer] Command received: " << command << std::endl;
+
+            if (commandCallback) {
+                commandCallback(command);
+            }
+        }
+    }
+}
+
 void WebServer::serverThread() {
-    std::string htmlPath = "dashboard.html";
+    std::string htaPath = "dashboard.hta";
 
     std::cout << "\n========================================" << std::endl;
-    std::cout << "  Web Dashboard: dashboard.html" << std::endl;
+    std::cout << "  Web Dashboard: dashboard.hta" << std::endl;
     std::cout << "  (Auto-updates every 2 seconds)" << std::endl;
     std::cout << "========================================\n" << std::endl;
 
-    // 처음 HTML 생성 후 브라우저에서 열기
+    // 처음 HTA 생성 후 실행
     {
-        std::ofstream file(htmlPath);
+        std::ofstream file(htaPath);
         if (file.is_open()) {
             file << generateDashboardHtml();
             file.close();
@@ -88,15 +108,15 @@ void WebServer::serverThread() {
     }
 
 #ifdef _WIN32
-    // Windows에서 기본 브라우저로 열기
-    ShellExecuteA(NULL, "open", htmlPath.c_str(), NULL, NULL, SW_SHOWNORMAL);
+    // Windows에서 HTA 실행
+    ShellExecuteA(NULL, "open", htaPath.c_str(), NULL, NULL, SW_SHOWNORMAL);
 #endif
 
-    // 주기적으로 HTML 파일 업데이트
+    // 주기적으로 HTA 파일 업데이트
     while (running) {
         std::this_thread::sleep_for(std::chrono::seconds(2));
 
-        std::ofstream file(htmlPath);
+        std::ofstream file(htaPath);
         if (file.is_open()) {
             file << generateDashboardHtml();
             file.close();
@@ -147,13 +167,55 @@ std::string WebServer::generateDashboardHtml() {
     std::ostringstream html;
     html << std::fixed;
 
-    html << R"(<!DOCTYPE html>
-<html lang="ko">
+    html << R"(<html>
 <head>
     <meta charset="UTF-8">
     <meta http-equiv="refresh" content="2">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="x-ua-compatible" content="ie=edge">
     <title>유안타 자동매매 시뮬레이터 v1.0.3</title>
+    <HTA:APPLICATION
+        ID="YuantaTrading"
+        APPLICATIONNAME="유안타 자동매매"
+        BORDER="thin"
+        BORDERSTYLE="normal"
+        INNERBORDER="no"
+        MAXIMIZEBUTTON="yes"
+        MINIMIZEBUTTON="yes"
+        SCROLL="yes"
+        SCROLLFLAT="yes"
+        SINGLEINSTANCE="yes"
+        SYSMENU="yes"
+        WINDOWSTATE="normal"
+    />
+    <script language="VBScript">
+        Sub SendCommand(cmd)
+            Dim fso, f
+            Set fso = CreateObject("Scripting.FileSystemObject")
+            Set f = fso.CreateTextFile("command.txt", True)
+            f.WriteLine cmd
+            f.Close
+        End Sub
+    </script>
+    <script language="JavaScript">
+        function startTrading() {
+            SendCommand('START');
+            document.getElementById('statusText').innerText = '시작 명령 전송됨...';
+        }
+        function stopTrading() {
+            SendCommand('STOP');
+            document.getElementById('statusText').innerText = '정지 명령 전송됨...';
+        }
+        function addWatchlist() {
+            var code = document.getElementById('watchlistInput').value;
+            if (code) {
+                SendCommand('ADD_WATCHLIST:' + code);
+                document.getElementById('watchlistInput').value = '';
+            }
+        }
+        function resetWatchlist() {
+            SendCommand('RESET_WATCHLIST');
+        }
+    </script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -351,11 +413,9 @@ std::string WebServer::generateDashboardHtml() {
                 <span>🤖</span>
                 <span>)" << (dashboardData.isSimulationMode ? "시뮬레이션" : "실거래") << R"( (08:50~15:30)</span>
             </div>
-            <select style="background:#1a2332;border:1px solid #2a3a4a;padding:8px 12px;border-radius:8px;color:#e1e5eb;">
-                <option>5x 속도</option>
-            </select>
-            <button class="btn btn-start">▶ 시작</button>
-            <button class="btn btn-stop">■ 정지</button>
+            <span id="statusText" style="color:#f1c40f;font-size:0.9em;">)" << (tradingActive ? "🟢 매매 활성화" : "⚪ 대기중") << R"(</span>
+            <button class="btn btn-start" onclick="startTrading()">▶ 시작</button>
+            <button class="btn btn-stop" onclick="stopTrading()">■ 정지</button>
         </div>
     </div>
 
@@ -365,9 +425,9 @@ std::string WebServer::generateDashboardHtml() {
             <span>우선검토 종목 (WATCHLIST)</span>
         </div>
         <div class="watchlist-input">
-            <input type="text" placeholder="종목명 또는 코드">
-            <button class="btn btn-add">추가</button>
-            <button class="btn btn-reset">초기화</button>
+            <input type="text" id="watchlistInput" placeholder="종목코드 (예: 005930)">
+            <button class="btn btn-add" onclick="addWatchlist()">추가</button>
+            <button class="btn btn-reset" onclick="resetWatchlist()">초기화</button>
         </div>
         <div class="watchlist-info">선택된 종목: <span style="color:#4ecdc4">전체 종목</span></div>
     </div>
