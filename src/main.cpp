@@ -4,6 +4,7 @@
 #include "../include/MarketDataManager.h"
 #include "../include/OrderExecutor.h"
 #include "../include/TechnicalIndicators.h"
+#include "../include/WebServer.h"
 
 #include <iostream>
 #include <fstream>
@@ -13,7 +14,6 @@
 #include <chrono>
 #include <atomic>
 
-// JSON 파싱용 간단한 헬퍼 (실제 환경에서는 nlohmann/json 등 사용)
 #include <sstream>
 #include <map>
 
@@ -21,6 +21,7 @@ using namespace yuanta;
 
 // 전역 상태
 std::atomic<bool> running{true};
+WebServer* g_webServer = nullptr;
 
 // 시그널 핸들러
 void signalHandler(int signum) {
@@ -31,11 +32,15 @@ void signalHandler(int signum) {
 // 간단한 설정 로더
 struct AppConfig {
     // API 설정
-    std::string apiServer = "simul.tradar.api.com";  // 기본: 모의투자 서버
-    std::string dllPath = "";  // yuantaapi.dll 경로
+    std::string apiServer = "simul.tradar.api.com";
+    std::string dllPath = "";
     std::string userId = "";
     std::string userPassword = "";
     std::string certPassword = "";
+
+    // 웹 대시보드 설정
+    int webPort = 8080;
+    bool enableWebDashboard = true;
 
     // 리스크 설정
     double dailyBudget = 10000000.0;
@@ -60,17 +65,14 @@ struct AppConfig {
 
         std::string line;
         while (std::getline(file, line)) {
-            // 주석 및 빈 줄 무시
             if (line.empty() || line[0] == '#' || line[0] == ';') continue;
 
-            // 간단한 key=value 파싱
             size_t pos = line.find('=');
             if (pos == std::string::npos) continue;
 
             std::string key = line.substr(0, pos);
             std::string value = line.substr(pos + 1);
 
-            // 앞뒤 공백 제거
             while (!key.empty() && (key.back() == ' ' || key.back() == '\t')) key.pop_back();
             while (!value.empty() && (value.front() == ' ' || value.front() == '\t')) value.erase(0, 1);
 
@@ -79,6 +81,8 @@ struct AppConfig {
             else if (key == "userId") userId = value;
             else if (key == "userPassword") userPassword = value;
             else if (key == "certPassword") certPassword = value;
+            else if (key == "webPort") webPort = std::stoi(value);
+            else if (key == "enableWebDashboard") enableWebDashboard = (value == "true" || value == "1");
             else if (key == "dailyBudget") dailyBudget = std::stod(value);
             else if (key == "maxPositionRatio") maxPositionRatio = std::stod(value);
             else if (key == "maxDailyLossRatio") maxDailyLossRatio = std::stod(value);
@@ -90,7 +94,6 @@ struct AppConfig {
                 std::stringstream ss(value);
                 std::string code;
                 while (std::getline(ss, code, ',')) {
-                    // 공백 제거
                     while (!code.empty() && code.front() == ' ') code.erase(0, 1);
                     while (!code.empty() && code.back() == ' ') code.pop_back();
                     if (!code.empty()) {
@@ -104,6 +107,90 @@ struct AppConfig {
         return true;
     }
 };
+
+// 대시보드 데이터 업데이트 함수
+void updateDashboard(WebServer& webServer, RiskManager& rm, StrategyManager& sm,
+                     MarketDataManager& dm, YuantaAPI& api, const AppConfig& config,
+                     long long startTime) {
+    DashboardData data;
+
+    // 계좌 정보
+    data.dailyBudget = config.dailyBudget;
+    data.realizedPnL = rm.getRealizedPnL();
+    data.unrealizedPnL = rm.getUnrealizedPnL();
+    data.totalPnL = rm.getTotalPnL();
+    data.winRate = rm.getWinRate();
+
+    auto trades = rm.getTodayTrades();
+    data.totalTrades = static_cast<int>(trades.size());
+    data.winTrades = 0;
+    data.lossTrades = 0;
+    for (const auto& trade : trades) {
+        if (trade.pnl > 0) data.winTrades++;
+        else if (trade.pnl < 0) data.lossTrades++;
+    }
+
+    // 시스템 상태
+    data.isRunning = running;
+    data.isMarketOpen = dm.isMarketOpen();
+    data.isSimulationMode = api.isSimulationMode();
+    data.serverUrl = config.apiServer;
+    data.uptime = std::chrono::duration_cast<std::chrono::seconds>(
+        std::chrono::system_clock::now().time_since_epoch()).count() - startTime;
+
+    // 포지션 정보
+    auto positions = rm.getAllPositions();
+    for (const auto& pos : positions) {
+        DashboardData::Position p;
+        p.code = pos.code;
+        p.name = pos.code;  // TODO: 종목명 조회
+        p.quantity = pos.quantity;
+        p.avgPrice = pos.avgPrice;
+        p.currentPrice = pos.currentPrice;
+        p.pnl = (pos.currentPrice - pos.avgPrice) * pos.quantity;
+        p.pnlRate = ((pos.currentPrice - pos.avgPrice) / pos.avgPrice) * 100;
+        data.positions.push_back(p);
+    }
+
+    // 시세 정보
+    for (const auto& code : config.watchlist) {
+        auto quote = dm.getQuote(code);
+        DashboardData::Quote q;
+        q.code = code;
+        q.price = quote.currentPrice;
+        q.change = quote.currentPrice - quote.prevClose;
+        q.changeRate = quote.changeRate;
+        q.volume = quote.volume;
+        data.quotes.push_back(q);
+    }
+
+    // 전략 정보
+    DashboardData::StrategyStatus s1;
+    s1.name = "Gap Pullback";
+    s1.enabled = config.enableGapPullback;
+    s1.signals = 0;
+    s1.trades = 0;
+    s1.pnl = 0;
+    data.strategies.push_back(s1);
+
+    DashboardData::StrategyStatus s2;
+    s2.name = "MA Breakout";
+    s2.enabled = config.enableMABreakout;
+    s2.signals = 0;
+    s2.trades = 0;
+    s2.pnl = 0;
+    data.strategies.push_back(s2);
+
+    DashboardData::StrategyStatus s3;
+    s3.name = "BB Squeeze";
+    s3.enabled = config.enableBBSqueeze;
+    s3.signals = 0;
+    s3.trades = 0;
+    s3.pnl = 0;
+    data.strategies.push_back(s3);
+
+    webServer.updateDashboardData(data);
+}
 
 void printStatus(RiskManager& rm, StrategyManager& sm) {
     std::cout << "\n========== Trading Status ==========" << std::endl;
@@ -124,20 +211,24 @@ void printStatus(RiskManager& rm, StrategyManager& sm) {
 int main(int argc, char* argv[]) {
     std::cout << "========================================" << std::endl;
     std::cout << "  Yuanta AutoTrading System v1.0" << std::endl;
+    std::cout << "  with Web Dashboard" << std::endl;
     std::cout << "========================================\n" << std::endl;
 
     // 시그널 핸들러 설정
     signal(SIGINT, signalHandler);
     signal(SIGTERM, signalHandler);
 
+    // 시작 시간 기록
+    long long startTime = std::chrono::duration_cast<std::chrono::seconds>(
+        std::chrono::system_clock::now().time_since_epoch()).count();
+
     // 설정 로드
     AppConfig config;
     config.loadFromFile("config/settings.ini");
 
-    // 기본 관심 종목 (설정 파일에 없는 경우)
+    // 기본 관심 종목
     if (config.watchlist.empty()) {
         config.watchlist = {"005930", "000660", "035420", "051910", "006400"};
-        // 삼성전자, SK하이닉스, NAVER, LG화학, 삼성SDI
     }
 
     // 1. 리스크 매니저 초기화
@@ -161,23 +252,19 @@ int main(int argc, char* argv[]) {
     YuantaAPI api;
     std::cout << "Initializing Yuanta API..." << std::endl;
 
-    // DLL 경로 지정 (설정 파일에 있으면 사용)
     if (!api.initialize(config.dllPath)) {
         std::cerr << "Critical error: Failed to initialize API" << std::endl;
         return 1;
     }
 
-    // 서버 연결
     std::cout << "Connecting to server: " << config.apiServer << std::endl;
     if (!api.connect(config.apiServer)) {
         std::cerr << "Failed to connect to server" << std::endl;
-        // 시뮬레이션 모드면 계속 진행
         if (!api.isSimulationMode()) {
             return 1;
         }
     }
 
-    // 로그인 (ID가 있는 경우에만)
     if (!config.userId.empty()) {
         std::cout << "Logging in as: " << config.userId << std::endl;
         if (!api.login(config.userId, config.userPassword, config.certPassword)) {
@@ -187,11 +274,9 @@ int main(int argc, char* argv[]) {
             }
         }
     } else if (api.isSimulationMode()) {
-        // 시뮬레이션 모드에서 로그인 없이 진행
         std::cout << "No login credentials - running in demo mode" << std::endl;
     }
 
-    // 모드 표시
     if (api.isSimulationMode()) {
         std::cout << "\n*** SIMULATION MODE - No real trading ***\n" << std::endl;
     } else {
@@ -206,8 +291,6 @@ int main(int argc, char* argv[]) {
     for (const auto& code : config.watchlist) {
         std::cout << "  - " << code;
         dataManager.addWatchlist(code);
-
-        // 과거 데이터 로드
         dataManager.loadHistoricalData(code, 60);
         auto dailyCandles = dataManager.getDailyCandles(code, 60);
         auto minuteCandles = dataManager.getMinuteCandles(code, 1, 100);
@@ -250,23 +333,33 @@ int main(int argc, char* argv[]) {
     stopLossMonitor.setRiskManager(&riskManager);
     stopLossMonitor.start();
 
-    // 시세 업데이트 콜백 설정
     dataManager.setQuoteUpdateCallback([&](const std::string& code, const QuoteData& quote) {
-        // 손절/익절 모니터에 시세 전달
         stopLossMonitor.onQuoteUpdate(code, quote);
     });
 
-    // 7. 실시간 시세 시작
+    // 7. 웹 대시보드 시작
+    WebServer webServer(config.webPort);
+    g_webServer = &webServer;
+
+    if (config.enableWebDashboard) {
+        webServer.start();
+        webServer.addLog("INFO", "", "System started", 0, 0, 0);
+    }
+
+    // 8. 실시간 시세 시작
     dataManager.startRealtime();
 
     std::cout << "========================================" << std::endl;
     std::cout << "System started. Press Ctrl+C to stop." << std::endl;
+    if (config.enableWebDashboard) {
+        std::cout << "Web Dashboard: http://localhost:" << config.webPort << std::endl;
+    }
     std::cout << "========================================\n" << std::endl;
 
-    // 8. 메인 루프
+    // 9. 메인 루프
     int loopCount = 0;
     while (running) {
-        // 장 시간 체크 (시뮬레이션 모드에서는 항상 열림)
+        // 장 시간 체크
         if (!api.isSimulationMode() && !dataManager.isMarketOpen()) {
             if (loopCount % 60 == 0) {
                 std::cout << "Market closed. Waiting..." << std::endl;
@@ -279,14 +372,16 @@ int main(int argc, char* argv[]) {
         // 일일 손실 한도 체크
         if (riskManager.isDailyLossLimitReached()) {
             std::cout << "Daily loss limit reached. Closing all positions..." << std::endl;
+            webServer.addLog("ALERT", "", "Daily loss limit reached", 0, 0, riskManager.getTotalPnL());
             orderExecutor.closeAllPositions();
             std::this_thread::sleep_for(std::chrono::seconds(60));
             continue;
         }
 
-        // 강제 청산 시간 체크 (14:30 이후) - 시뮬레이션에서는 무시
+        // 강제 청산 시간 체크
         if (!api.isSimulationMode() && riskManager.shouldForceClose()) {
             std::cout << "Market close approaching. Closing all positions..." << std::endl;
+            webServer.addLog("ALERT", "", "Force close time reached", 0, 0, 0);
             orderExecutor.closeAllPositions();
             std::this_thread::sleep_for(std::chrono::seconds(60));
             continue;
@@ -305,17 +400,19 @@ int main(int argc, char* argv[]) {
             // 신호 처리
             for (const auto& signal : signals) {
                 if (signal.signal == Signal::BUY) {
-                    // 진입 가능 여부 확인
                     int qty = riskManager.calculatePositionSize(signal.price);
                     if (riskManager.canOpenPosition(code, signal.price, qty)) {
                         std::cout << "[" << code << "] BUY SIGNAL @ "
                                   << std::fixed << std::setprecision(0) << signal.price
                                   << " (" << signal.reason << ")" << std::endl;
 
+                        webServer.addLog("SIGNAL", code, signal.reason, signal.price, qty, 0);
+
                         if (api.isSimulationMode()) {
                             std::cout << "  -> Simulated buy: " << qty << " shares" << std::endl;
                         }
                         orderExecutor.executeSignal(signal);
+                        webServer.addLog("BUY", code, "Order executed", signal.price, qty, 0);
                     }
                 }
             }
@@ -329,11 +426,17 @@ int main(int argc, char* argv[]) {
 
             for (const auto& closeSignal : closeSignals) {
                 std::cout << "[" << closeSignal.code << "] CLOSE SIGNAL" << std::endl;
+                webServer.addLog("SELL", closeSignal.code, "Position closed", closeSignal.price, 0, 0);
                 orderExecutor.executeSignal(closeSignal);
             }
         }
 
-        // 상태 출력 (30초마다)
+        // 대시보드 업데이트 (2초마다)
+        if (loopCount % 2 == 0) {
+            updateDashboard(webServer, riskManager, strategyManager, dataManager, api, config, startTime);
+        }
+
+        // 콘솔 상태 출력 (30초마다)
         if (++loopCount % 30 == 0) {
             printStatus(riskManager, strategyManager);
         }
@@ -341,16 +444,15 @@ int main(int argc, char* argv[]) {
         std::this_thread::sleep_for(std::chrono::seconds(1));
     }
 
-    // 9. 종료 처리
+    // 10. 종료 처리
     std::cout << "\nShutting down..." << std::endl;
+    webServer.addLog("INFO", "", "System shutting down", 0, 0, 0);
 
-    // 모든 포지션 청산
     orderExecutor.closeAllPositions();
-
-    // 서비스 중지
     dataManager.stopRealtime();
     stopLossMonitor.stop();
     orderExecutor.stop();
+    webServer.stop();
     api.disconnect();
 
     // 최종 통계 출력

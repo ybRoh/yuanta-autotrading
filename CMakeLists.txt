@@ -48,6 +48,10 @@ set(DATA_SOURCES
     src/data/MarketDataManager.cpp
 )
 
+set(WEB_SOURCES
+    src/web/WebServer.cpp
+)
+
 # 라이브러리 빌드
 add_library(yuanta_trading STATIC
     ${API_SOURCES}
@@ -55,7 +59,11 @@ add_library(yuanta_trading STATIC
     ${STRATEGY_SOURCES}
     ${INDICATOR_SOURCES}
     ${DATA_SOURCES}
+    ${WEB_SOURCES}
 )
+
+# third_party 헤더 경로 추가
+target_include_directories(yuanta_trading PUBLIC ${CMAKE_SOURCE_DIR}/include/third_party)
 
 # 메인 실행 파일
 add_executable(yuanta_autotrading src/main.cpp)
